@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>dsh-plugins — DeepSeek Harness 用プラグイン置き場</title>
+<meta name="description" content="DeepSeek Harness（DSH）を自分の作業環境に合わせるために書いたプラグイン7つの紹介。MIT ライセンス。" />
+<meta name="theme-color" content="#0b0d12" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="deck"><div id="deck-inner">
+
+<!-- 01 hero -->
+<section id="hero" class="slide slide--hero">
+  <div class="frame">
+    <p class="kicker">DeepSeek Harness 用</p>
+    <h1 class="hero-title">プラグイン<br /><span class="grad">置き場</span></h1>
+    <p class="hero-sub">DSH を、自分の作業環境に合わせる。</p>
+    <div class="chips">
+      <span class="chip chip--accent">7 plugins</span>
+      <span class="chip">MIT</span>
+      <span class="chip">Windows</span>
+      <span class="chip">無料</span>
+    </div>
+    <p class="hero-meta">github.com/makochannel1234567890-boop/dsh-plugins</p>
+    <p class="hint">↓ スクロール</p>
+  </div>
+</section>
+
+<!-- 02 list -->
+<section id="list" class="slide">
+  <div class="frame">
+    <p class="kicker">収録プラグイン</p>
+    <h2 class="h2">7 つ、ぜんぶ<br />無料で MIT</h2>
+    <ol class="list">
+      <li><span class="num">01</span><span class="list-name">dsh-fanout</span><span class="list-tag">分岐と統合</span></li>
+      <li><span class="num">02</span><span class="list-name">dsh-browser-agent</span><span class="list-tag">ブラウザ操作</span></li>
+      <li><span class="num">03</span><span class="list-name">dsh-mobile-progress</span><span class="list-tag">スマホ進捗</span></li>
+      <li><span class="num">04</span><span class="list-name">dsh-deliberation</span><span class="list-tag">承認つき長考</span></li>
+      <li><span class="num">05</span><span class="list-name">dsh-emulator-lab</span><span class="list-tag">低スペック検証</span></li>
+      <li><span class="num">06</span><span class="list-name">dsh-social-desktop-agent</span><span class="list-tag">スコープ制</span></li>
+      <li><span class="num">07</span><span class="list-name">dsh-builtin-browser-localfix</span><span class="list-tag">パッチ</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 03 card 1 -->
+<section id="p1" class="slide slide--card">
+  <div class="frame card">
+    <p class="kicker">01 / 07</p>
+    <h2 class="card-title">dsh-fanout</h2>
+    <p class="card-ver"><code>dsh-fanout</code> · v0.3.0</p>
+    <p class="card-lead">1 セッションを複数の並行ワーカーに振り分け、重さで配分。最後に統合用セッションが統合・検証・ビルドまでやる。</p>
+    <ul class="bullets">
+      <li>並行ワーカーへの自動配分</li>
+      <li>統合役（統合＋検証＋ビルド）の自動起動</li>
+      <li>早すぎる結論を潰す <code>divergence_check</code></li>
+      <li>左サイドバーのボード／Web スライダー 2 本</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 04 card 2 -->
+<section id="p2" class="slide slide--card">
+  <div class="frame card">
+    <p class="kicker">02 / 07</p>
+    <h2 class="card-title">dsh-browser-agent</h2>
+    <p class="card-ver"><code>dsh-browser-agent</code> · v1.0.1</p>
+    <p class="card-lead">内蔵サイドバーブラウザを 19 個の <code>browser_*</code> ツールで実操作する。</p>
+    <ul class="bullets">
+      <li>アクセシビリティツリー＋安定 ref</li>
+      <li>実 CDP 入力・スクショ・ネットワーク傍受</li>
+      <li>端末エミュレーション／cookie 保管庫</li>
+      <li>第三者の作品（hermes-ai-2026, MIT）— この repo には未収録</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 05 card 3 -->
+<section id="p3" class="slide slide--card">
+  <div class="frame card">
+    <p class="kicker">03 / 07</p>
+    <h2 class="card-title">dsh-mobile-progress</h2>
+    <p class="card-ver"><code>@local/dsh-mobile-progress</code> · v0.3.0<br /><span class="small">インストール時のフォルダ名は <code>dsh-mobile-progress</code></span></p>
+    <p class="card-lead">エージェントの進捗をスマホの PWA で見る。Host プラグインが SSE で進捗バーを配信する。</p>
+    <ul class="bullets">
+      <li><code>todo_write</code> の自動ミラー</li>
+      <li>スマホでワークスペースを選んで新セッション開始</li>
+      <li>最終アシスタント結果も同じ画面に</li>
+      <li>cloudflared で LAN 外から・配信中はスリープ抑止</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 06 card 4 -->
+<section id="p4" class="slide slide--card">
+  <div class="frame card">
+    <p class="kicker">04 / 07</p>
+    <h2 class="card-title">dsh-deliberation</h2>
+    <p class="card-ver"><code>dsh-deliberation</code> · v0.1.0</p>
+    <p class="card-lead">承認つきの、範囲の決まった長考モード。</p>
+    <ul class="bullets">
+      <li>始める前にユーザーの承認を取る</li>
+      <li>任意で Git 作業ツリーに隔離</li>
+      <li>ラウンドを自動継続（予算・停滞・ユーザー優先のガード付き）</li>
+      <li>新しいメッセージでいつでも止まる</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 07 card 5 -->
+<section id="p5" class="slide slide--card">
+  <div class="frame card">
+    <p class="kicker">05 / 07</p>
+    <h2 class="card-title">dsh-emulator-lab</h2>
+    <p class="card-ver"><code>dsh-emulator-lab</code> · v0.1.0</p>
+    <p class="card-lead">サイドバーから Android AVD / iOS Simulator を起動し、低スペック端末の FPS を見積もる。</p>
+    <ul class="bullets">
+      <li>端末プロファイルと SoC を選択</li>
+      <li>決定論的な SoC モデルで推定（INT8 TOPS・メモリ帯域・CPU/GPU スコア・熱予算）</li>
+      <li>「推定」であることとボトルネックを明示</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 08 card 6 -->
+<section id="p6" class="slide slide--card">
+  <div class="frame card">
+    <p class="kicker">06 / 07</p>
+    <h2 class="card-title">dsh-social-desktop-agent</h2>
+    <p class="card-ver"><code>dsh-social-desktop-agent</code> · v0.1.0</p>
+    <p class="card-lead">allowlist 内のソーシャル Web 閲覧と、ローカルデスクトップの観察・操作。既定は最小権限。</p>
+    <ul class="bullets">
+      <li>明示的なスコープ付与＋host / app allowlist</li>
+      <li>いいね・フォロー・DM・投稿・コメントは恒久拒否</li>
+      <li>電源操作は三段ゲートで既定 dry-run</li>
+      <li>追記専用の監査ログ＋kill switch</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 09 card 7 -->
+<section id="p7" class="slide slide--card">
+  <div class="frame card">
+    <p class="kicker">07 / 07</p>
+    <h2 class="card-title">dsh-builtin-browser-localfix</h2>
+    <p class="card-ver"><span class="small">package.json なし（パッチ配布）</span></p>
+    <p class="card-lead">内蔵ブラウザを「1 ターンの終わりに、そのタスクのブラウザセッションを閉じる」ようにするパッチ。</p>
+    <ul class="bullets">
+      <li><code>turn-cleanup.patch</code> ＋ 適用スクリプト <code>apply.ps1</code></li>
+      <li>ターンをまたいでタブが残らない／タスクごとに独立</li>
+      <li>反映には DSH の再起動が必要</li>
+      <li><code>DSH_BROWSER_KEEP_TABS=1</code> か config で無効化できる</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 10 source -->
+<section id="source" class="slide slide--source">
+  <div class="frame">
+    <p class="kicker">原文</p>
+    <h2 class="h2">各 package.json の<br />description</h2>
+    <dl class="src">
+      <dt>dsh-fanout</dt>
+      <dd>Fan one session out into several parallel worker sessions for large asymmetric jobs, auto-start an integrator that merges + verifies + builds, run an unanchored expansion gate against premature narrowing, show every run's progress on a left-sidebar board, and dial the cost with two Web sliders.</dd>
+      <dt>dsh-browser-agent</dt>
+      <dd>Give DeepSeek Harness agents a real browser: drive the built-in sidebar browser with 19 browser_* tools — accessibility-tree reads with stable refs, real CDP input, screenshots, network interception, device emulation, cookie vault, document-start injection, multi-instance, and raw CDP passthrough. 让 DSH 的 agent 真正用上内置浏览器。</dd>
+      <dt>dsh-mobile-progress</dt>
+      <dd>Live agent progress on the phone as an installable PWA: a Host plugin serves a progress bar over SSE, starts a new DSH session from a workspace chosen on the phone, shows the final assistant result on the same screen, exposes a public HTTPS URL through a cloudflared tunnel (so the phone works off the LAN), and keeps the PC awake while the feed is live.</dd>
+      <dt>dsh-deliberation</dt>
+      <dd>Bounded extended-deliberation mode for DeepSeek Harness: ask the user for approval, optionally isolate a Git worktree, then auto-continue deep-thinking rounds with budget, stagnation, and user-priority guards.</dd>
+      <dt>dsh-emulator-lab</dt>
+      <dd>Boot Android AVDs and iOS Simulators from the DSH sidebar and estimate low-end phone FPS from a deterministic SoC model (INT8 TOPS, memory bandwidth and capacity, CPU/GPU scores, thermal budget).</dd>
+      <dt>dsh-social-desktop-agent</dt>
+      <dd>Let a DSH agent read and interact with allowlisted social web pages and observe/operate the local desktop, under an explicit scope grant, host/app allowlists, a permanent ban on write-type social actions, confirmation-gated power operations, an append-only audit log and a kill switch.</dd>
+      <dt>dsh-builtin-browser-localfix</dt>
+      <dd>package.json がありません。README.md の見出し「dsh-builtin-browser ローカルパッチ：ターン終了時にタブを閉じる」と、その冒頭説明（内蔵ブラウザに、1 ターンが終わった時点でそのタスクのブラウザセッションを自動で閉じる工程を足したもの）を出典としています。</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- 11 install -->
+<section id="install" class="slide slide--end">
+  <div class="frame">
+    <p class="kicker">使い方</p>
+    <h2 class="h2">プラグインを入れる</h2>
+    <pre class="code">git clone https://github.com/makochannel1234567890-boop/dsh-plugins.git
+
+# ほしいプラグインのフォルダを DSH の
+# プロファイルのプラグイン置き場へ
+# （フォルダ名をそのまま使う）</pre>
+    <ul class="bullets">
+      <li>各フォルダに README（導入手順・確認したこと）</li>
+      <li><code>package.json</code> の <code>description</code> が一次情報</li>
+      <li>全部無料・MIT。フォークも再配布も可</li>
+    </ul>
+    <p class="hero-meta">github.com/makochannel1234567890-boop/dsh-plugins</p>
+    <p class="footer-note">© 2026 mako7studio · MIT License</p>
+  </div>
+</section>
+
+</div></div>
+
+<!-- 撮影用モード（index.html?reel=0 … ?reel=install）。
+     通常表示はそのまま。撮影時だけ 540x960 のキャンバスを 2 倍で描き、
+     fullPage スクショを 1080x1920 で切り出せるようにする。 -->
+<script>
+(function () {
+  var param = new URLSearchParams(location.search).get('reel');
+  if (param === null) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var deck = document.getElementById('deck');
+  var inner = document.getElementById('deck-inner');
+  var DECK_W = 540, DECK_H = 960;
+  var idx = /^\d+$/.test(param) ? Number(param) : -1;
+  if (idx < 0) {
+    idx = sections.findIndex(function (s) { return s.id === param; });
+  }
+  if (!(idx >= 0 && idx < sections.length)) idx = 0;
+  document.documentElement.classList.add('reel-root');
+  document.body.classList.add('reel');
+  function show(n) {
+    var i = Math.max(0, Math.min(sections.length - 1, n));
+    inner.style.transform = 'translateY(' + (-i * DECK_H) + 'px)';
+    document.title = 'reel ' + i + ' — ' + (sections[i].id || i);
+    return i;
+  }
+  show(idx);
+  window.__reel = show;
+  console.log('reel mode:', DECK_W + 'x' + DECK_H, '→ slide', idx, sections[idx].id);
+})();
+</script>
+
+</body>
+</html>
