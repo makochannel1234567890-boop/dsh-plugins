@@ -173,3 +173,27 @@ $ Invoke-WebRequest https://makochannel1234567890-boop.github.io/dsh-plugins/
 → これは想定どおり（Pages 未設定）。設定後に 200 と 7 プラグイン名が出れば公開成功。
 
 > サイトを更新したら `git subtree push --prefix=reel/site origin gh-pages` をもう一度実行する。
+
+---
+
+## 7. 再検証（2026-11-17 22:26〜22:29 / DSH 再起動後の別セッションで実測）
+
+ホストが再起動してセッションが切れたため、残した成果物が「いまの `index.html` / `style.css` の
+描画と一致しているか」を撮り直して確かめた。測った値は以下のとおり。
+
+- `node reel\site\serve.mjs` を起動 → `GET /` は **200 / 12416 bytes / text/html; charset=utf-8**、
+  `GET /style.css` は **200**（2 回目の起動でも同じ）
+- HTML 内の出現数: `dsh-fanout`×4 / `dsh-browser-agent`×4 / `dsh-mobile-progress`×5 /
+  `dsh-deliberation`×4 / `dsh-emulator-lab`×4 / `dsh-social-desktop-agent`×4 /
+  `dsh-builtin-browser-localfix`×3、および 7 つぶんの `description` 引用がすべて含まれる
+- `?reel=hero` をブラウザで開いたときの実測: `#deck` の描画サイズ **1079.99 x 1919.99 CSS px**
+  （`getBoundingClientRect`）、スライド数 **11**、`title` は `reel 0 — hero`
+- フルページ・スクショは **3352x4637 px** → 左 **2608 px** を切り出し → **1080x1920** に縮小
+- 撮り直した `01-hero.png` と、コミット済み `reel/media/site/01-hero.png` の画素差は
+  **MAD 0.57 / 255（42,625 点サンプル、最大 104）** = 実質同一。つまり保存済みスクショは
+  現在のサイトの描画そのもの
+- `git ls-remote --heads origin` → `refs/heads/main = fc8ce72`、`refs/heads/gh-pages = 0e13297`
+  （push 済みであることをローカルからではなくリモート側で確認）
+- `https://makochannel1234567890-boop.github.io/dsh-plugins/` は **404**（Pages 未設定のため。
+  `docs/GITHUB-SETUP.md` の 3 を実行すると有効になる）
+
