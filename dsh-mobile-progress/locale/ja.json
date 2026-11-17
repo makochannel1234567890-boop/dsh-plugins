@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "スマホ進捗フィード",
+    "description": "エージェントの進捗をスマホでライブ表示。進捗バーとステップ一覧を LAN 経由で配信し、todo_write と progress_update から自動更新します。"
+  }
+}

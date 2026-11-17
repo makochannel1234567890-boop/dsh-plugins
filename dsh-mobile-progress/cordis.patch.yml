@@ -1,0 +1,35 @@
+# dsh-mobile-progress bundle patch:
+# inserts the Host plugin that serves the phone progress page (PWA).
+#
+# Reachability
+#   host: '0.0.0.0'      same Wi-Fi (LAN) access
+#   tunnel.enabled       public HTTPS URL through a Cloudflare tunnel, so the
+#                        phone works on mobile data / another Wi-Fi. The page is
+#                        then protected by the access token (?k=…), which is
+#                        generated once and stored in
+#                        ~/.dsh/storages/mobile-progress/access-token
+#   keepAwake            keeps Windows from suspending while the feed is live,
+#                        because a sleeping PC cannot answer the phone
+#
+# Disable remote access with `tunnel: false`, disable only the sleep guard with
+# `keepAwake: false`.
+- insert:
+    - id: mobile-progress
+      name: '@local/dsh-mobile-progress'
+      config:
+        enabled: true
+        port: 8790
+        host: '0.0.0.0'
+        accessToken: ''
+        title: 'DSH Progress'
+        autoClaim: true
+        persist: true
+        tunnel:
+          enabled: true
+          provider: 'cloudflared'
+          mode: 'quick'        # 'quick' = random https://*.trycloudflare.com
+          autoDownload: true   # fetch cloudflared into the storage dir once
+          requireToken: true
+        keepAwake:
+          enabled: true
+          keepDisplayOn: false

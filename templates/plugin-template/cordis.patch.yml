@@ -1,0 +1,8 @@
+# {{TITLE}} bundle patch.
+#
+# `id` must be unique inside the profile. The `config` object becomes the second
+# argument of `apply(ctx, config)` in index.js.
+- insert:
+    - id: {{ID}}
+      name: '{{PACKAGE}}'
+      config: {}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session Progress Bus",
+    "description": "Automatically shares each session's recent progress with every other parallel session, adds a peer-progress digest to the prompt, and exposes a share_progress tool."
+  }
+}

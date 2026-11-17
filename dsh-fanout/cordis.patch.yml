@@ -1,0 +1,5 @@
+# dsh-fanout bundle patch: insert the Host plugin row into the profile layer stack.
+- insert:
+    - id: fanout
+      name: 'dsh-fanout'
+      config: {}

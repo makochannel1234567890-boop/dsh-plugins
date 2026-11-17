@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Long Deliberation",
+    "description": "Asks for approval, can isolate a Git worktree, then auto-continues bounded deep-thinking rounds with budget and stagnation guards."
+  }
+}

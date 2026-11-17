@@ -1,0 +1,168 @@
+# dsh-builtin-browser 0.5.8 — close a task's browser session when its turn ends.
+# Apply from the package root (…/profiles/desktop/node_modules/dsh-builtin-browser):
+#   git apply -p1 --whitespace=nowarn turn-cleanup.patch
+# or run apply.ps1 next to this file, which copies patched/ over the package and
+# backs up what it replaces.
+
+diff --git a/lib/tool-browser/index.js b/lib/tool-browser/index.js
+index 1f4f371..47abb4a 100644
+--- a/lib/tool-browser/index.js
++++ b/lib/tool-browser/index.js
+@@ -309,16 +309,65 @@ export function apply(ctx, config = {}) {
+     state.configRestrictedTo = config.allowedActions !== undefined ? [...config.allowedActions] : undefined;
+     ctx.systemPrompt.section({
+         name: 'tool:browser',
+         // Tool guidance band is 100-199; 150 keeps clear of the common 110/120
+         // tool sections so ordering does not depend on plugin load sequence.
+         order: 150,
+         text: 'Use dsh_browser_* tools to operate the built-in browser. Each task has its own session and window (real toolbar): the human can watch and take over, and other tasks\' pages are not visible to you. Map a page with dsh_browser_a11y (semantic roles/names/states) or dsh_browser_snapshot (numbered elements), then drive it: dsh_browser_click/dsh_browser_type take a target {by: css|text|xpath, value}, or coordinates from dsh_browser_screenshot. Prefer dsh_browser_fill (batch) or dsh_browser_set_value/check/select/clear for forms; verify with dsh_browser_get_value. Use dsh_browser_scrape (not hand-written dsh_browser_execute) for list pages; dsh_browser_wait after slow navigation. Use dsh_browser_do for a run of steps, dsh_browser_assert to check results, and dsh_browser_console/network when the screen is unclear. Say what you are doing on the page. On a CAPTCHA (dsh_browser_challenge), stop retrying and ask the human to solve it in the browser window, then re-check.',
+     });
++    /**
++     * 終了ワークフロー：ターンが閉じる直前に、そのタスクのブラウザセッションを閉じる。
++     *
++     * これまでセッションの寿命は agent ctx の破棄（＝会話が終わるまで）だったので、
++     * 1ターンで開いたタブとウィンドウが次のターンにも残り続けた。`agent/turn-stopping` は
++     * 「モデルがもう何も返さず、生きたツール呼び出しも無い」と確定した瞬間 —— 利用者から
++     * 見れば「この作業は終わった」瞬間なので、ここでタブごと閉じる。
++     *
++     * 既定で有効。止めたいときは cordis.patch.yml の tool-browser 行に
++     * `closeTabsOnTurnEnd: false` を書くか、環境変数 DSH_BROWSER_KEEP_TABS=1 を立てる。
++     */
++    const closeTabsOnTurnEnd = config.closeTabsOnTurnEnd !== false && process.env.DSH_BROWSER_KEEP_TABS !== '1';
++    if (closeTabsOnTurnEnd) {
++        // モデル側の前提も揃える：ターンをまたいでタブは残らない、と明示しないと
++        // 「さっき開いたページの続き」を前提にした操作を次のターンでやってしまう。
++        ctx.systemPrompt.section({
++            name: 'tool:browser/turn-cleanup',
++            order: 151,
++            text: 'Tabs do not outlive a turn: this plugin closes the task\'s browser session (window and tabs) when a turn ends, so open tabs, form input and page state are gone at the next turn — re-open and re-read instead of assuming continuity. If the human wants a page kept, say it closes with the turn and offer to save it (dsh_browser_content / dsh_browser_download) before you finish.',
++        });
++        /**
++         * そのタスクのセッションを閉じ、対応表からも消す。
++         *
++         * 消してから閉じるのが要点：`agent.ctx.effect` の dispose 経路（会話終了時）が
++         * 同じセッションを二度閉じにいかないよう、先に対応表を空にする。閉じるのは
++         * 待たない —— 失敗しても、次のブラウザ操作は新しいセッションを開く。
++         * @param {string} key タスクキー（DSH セッション id）
++         */
++        const closeTaskSession = (key) => {
++            const session = state.sessionsByTask.get(key);
++            if (session === undefined)
++                return;
++            state.sessionsByTask.delete(key);
++            const browser = ctx.get('browser');
++            if (browser === undefined)
++                return;
++            void browser.close(session).catch(() => { });
++        };
++        ctx.on('agent/turn-stopping', (payload) => {
++            closeTaskSession(payload?.agent?.id ?? 'default');
++        });
++        // 中断・エラーで `turn-stopping` が来ないターンもある（利用者が停止を押した場合など）ので、
++        // アイドル遷移でも同じ後始末を通す。closeTaskSession が先に map を消すので二重 close にはならない。
++        ctx.on('agent/status', (payload) => {
++            if (payload?.status !== 'idle')
++                return;
++            closeTaskSession(payload?.agent?.id ?? 'default');
++        });
++    }
+     /**
+      * Register one tool, turning a name collision into a warning instead of a dead apply.
+      *
+      * Registering the tools in sequence without this is how ONE taken name becomes thirty-two
+      * missing ones: the throw aborts the rest of the apply, and what the user sees is a plugin that
+      * half-exists. That is precisely the shape of the failure reported against a sibling plugin,
+      * where the first spec collided and all six vanished behind a `console.warn` a desktop user
+      * never sees.
+diff --git a/src/tool-browser/index.ts b/src/tool-browser/index.ts
+index d227d59..512dc18 100644
+--- a/src/tool-browser/index.ts
++++ b/src/tool-browser/index.ts
+@@ -57,16 +57,25 @@ export const inject = ['tools', 'browser', 'systemPrompt']
+ /** Plugin config: tool timeouts and session defaults. */
+ export interface Config {
+   /** Cooperative tool-call budget in ms. Default 60000. */
+   readonly timeoutMs?: number
+   /** Whether to offer tab-management tools. Default true. */
+   readonly tabTools?: boolean
+   /** Optional initial allow-list of browser tool names; other tools are refused. */
+   readonly allowedActions?: readonly string[]
++  /**
++   * Whether a task's browser session closes when its turn ends. Default true.
++   *
++   * The end-of-turn cleanup: without it a session lives until its agent context is
++   * disposed, i.e. until the whole conversation ends, so every tab the agent opened
++   * stays in the window across turns. `DSH_BROWSER_KEEP_TABS=1` disables it without
++   * editing any config.
++   */
++  readonly closeTabsOnTurnEnd?: boolean
+ }
+ 
+ /** Per-apply (per-context) tool state: sessions, in-flight opens, restriction. */
+ interface ToolBrowserState {
+   /** Per-task browser sessions, keyed by the calling DSH session id. */
+   readonly sessionsByTask: Map<string, BrowserSessionId>
+   /** In-flight first-open per task key, so concurrent first calls share one session. */
+   readonly pendingOpens: Map<string, Promise<BrowserSessionId>>
+@@ -366,16 +375,61 @@ export function apply(ctx: Context, config: Config = {}): void {
+   ctx.systemPrompt.section({
+     name: 'tool:browser',
+     // Tool guidance band is 100-199; 150 keeps clear of the common 110/120
+     // tool sections so ordering does not depend on plugin load sequence.
+     order: 150,
+     text: 'Use dsh_browser_* tools to operate the built-in browser. Each task has its own session and window (real toolbar): the human can watch and take over, and other tasks\' pages are not visible to you. Map a page with dsh_browser_a11y (semantic roles/names/states) or dsh_browser_snapshot (numbered elements), then drive it: dsh_browser_click/dsh_browser_type take a target {by: css|text|xpath, value}, or coordinates from dsh_browser_screenshot. Prefer dsh_browser_fill (batch) or dsh_browser_set_value/check/select/clear for forms; verify with dsh_browser_get_value. Use dsh_browser_scrape (not hand-written dsh_browser_execute) for list pages; dsh_browser_wait after slow navigation. Use dsh_browser_do for a run of steps, dsh_browser_assert to check results, and dsh_browser_console/network when the screen is unclear. Say what you are doing on the page. On a CAPTCHA (dsh_browser_challenge), stop retrying and ask the human to solve it in the browser window, then re-check.',
+   })
+ 
++  /**
++   * 終了ワークフロー：ターンが閉じる直前に、そのタスクのブラウザセッションを閉じる。
++   *
++   * これまでセッションの寿命は agent ctx の破棄（＝会話が終わるまで）だったので、
++   * 1ターンで開いたタブとウィンドウが次のターンにも残り続けた。`agent/turn-stopping` は
++   * 「モデルがもう何も返さず、生きたツール呼び出しも無い」と確定した瞬間 —— 利用者から
++   * 見れば「この作業は終わった」瞬間なので、ここでタブごと閉じる。
++   */
++  const closeTabsOnTurnEnd = config.closeTabsOnTurnEnd !== false && process.env.DSH_BROWSER_KEEP_TABS !== '1'
++  if (closeTabsOnTurnEnd) {
++    // モデル側の前提も揃える：ターンをまたいでタブは残らない、と明示しないと
++    // 「さっき開いたページの続き」を前提にした操作を次のターンでやってしまう。
++    ctx.systemPrompt.section({
++      name: 'tool:browser/turn-cleanup',
++      order: 151,
++      text: 'Tabs do not outlive a turn: this plugin closes the task\'s browser session (window and tabs) when a turn ends, so open tabs, form input and page state are gone at the next turn — re-open and re-read instead of assuming continuity. If the human wants a page kept, say it closes with the turn and offer to save it (dsh_browser_content / dsh_browser_download) before you finish.',
++    })
++    /**
++     * そのタスクのセッションを閉じ、対応表からも消す。
++     *
++     * 消してから閉じるのが要点：`agent.ctx.effect` の dispose 経路（会話終了時）が
++     * 同じセッションを二度閉じにいかないよう、先に対応表を空にする。閉じるのは
++     * 待たない —— 失敗しても、次のブラウザ操作は新しいセッションを開く。
++     * @param key タスクキー（DSH セッション id）
++     */
++    const closeTaskSession = (key: string): void => {
++      const session = state.sessionsByTask.get(key)
++      if (session === undefined) return
++      state.sessionsByTask.delete(key)
++      const browser = ctx.get('browser')
++      if (browser === undefined) return
++      void browser.close(session).catch(() => { })
++    }
++    ctx.on('agent/turn-stopping', (payload: unknown) => {
++      closeTaskSession((payload as { agent?: { id?: string } } | undefined)?.agent?.id ?? 'default')
++    })
++    // 中断・エラーで `turn-stopping` が来ないターンもある（利用者が停止を押した場合など）ので、
++    // アイドル遷移でも同じ後始末を通す。closeTaskSession が先に map を消すので二重 close にはならない。
++    ctx.on('agent/status', (payload: unknown) => {
++      const status = (payload as { status?: string } | undefined)?.status
++      if (status !== 'idle') return
++      closeTaskSession((payload as { agent?: { id?: string } } | undefined)?.agent?.id ?? 'default')
++    })
++  }
++
+   /**
+    * Register one tool, turning a name collision into a warning instead of a dead apply.
+    *
+    * Registering the tools in sequence without this is how ONE taken name becomes thirty-two
+    * missing ones: the throw aborts the rest of the apply, and what the user sees is a plugin that
+    * half-exists. That is precisely the shape of the failure reported against a sibling plugin,
+    * where the first spec collided and all six vanished behind a `console.warn` a desktop user
+    * never sees.

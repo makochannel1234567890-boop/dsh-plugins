@@ -1,0 +1,37 @@
+{
+  "name": "dsh-deliberation",
+  "version": "0.1.0",
+  "description": "Bounded extended-deliberation mode for DeepSeek Harness: ask the user for approval, optionally isolate a Git worktree, then auto-continue deep-thinking rounds with budget, stagnation, and user-priority guards.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/en.json",
+    "locale/ja.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "deliberation",
+    "thinking",
+    "worktree",
+    "agent"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

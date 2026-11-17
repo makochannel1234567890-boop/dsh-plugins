@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Fan-out: one node splitting into four">
+  <title>Fan-out</title>
+  <desc>An original mark: a single root node fanning out into four child nodes, teal to blue.</desc>
+  <defs>
+    <linearGradient id="fanout-teal-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0fb5a6"/>
+      <stop offset="0.55" stop-color="#0f9bd9"/>
+      <stop offset="1" stop-color="#2f6bff"/>
+    </linearGradient>
+    <linearGradient id="fanout-ring" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f6bff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#0fb5a6" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="url(#fanout-ring)"/>
+  <g fill="none" stroke="url(#fanout-teal-blue)" stroke-width="2.6" stroke-linecap="round">
+    <path d="M13 32 C24 32 26 10 46 10"/>
+    <path d="M13 32 C24 32 26 25 46 25"/>
+    <path d="M13 32 C24 32 26 39 46 39"/>
+    <path d="M13 32 C24 32 26 54 46 54"/>
+  </g>
+  <g fill="url(#fanout-teal-blue)">
+    <circle cx="13" cy="32" r="5.4"/>
+    <circle cx="46" cy="10" r="4"/>
+    <circle cx="46" cy="25" r="4"/>
+    <circle cx="46" cy="39" r="4"/>
+    <circle cx="46" cy="54" r="4"/>
+  </g>
+  <g fill="#ffffff" fill-opacity="0.55">
+    <circle cx="13" cy="32" r="1.6"/>
+    <circle cx="46" cy="10" r="1.1"/>
+    <circle cx="46" cy="25" r="1.1"/>
+    <circle cx="46" cy="39" r="1.1"/>
+    <circle cx="46" cy="54" r="1.1"/>
+  </g>
+</svg>

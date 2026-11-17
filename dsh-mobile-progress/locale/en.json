@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Mobile Progress",
+    "description": "Live agent progress on your phone: a compact progress bar and step list served over the LAN, updated automatically from todo_write and progress_update."
+  }
+}

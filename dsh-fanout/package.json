@@ -1,0 +1,48 @@
+{
+  "name": "dsh-fanout",
+  "version": "0.1.0",
+  "description": "Fan one session out into several parallel worker sessions for large asymmetric jobs, auto-start an integrator that merges + verifies + builds, run an unanchored expansion gate against premature narrowing, and dial the cost with two Web sliders.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "fan-out",
+    "orchestration",
+    "parallel-sessions",
+    "divergence",
+    "context-engineering"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}

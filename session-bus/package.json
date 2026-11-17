@@ -1,0 +1,37 @@
+{
+  "name": "dsh-session-bus",
+  "version": "0.1.0",
+  "description": "Automatic progress sharing across parallel DeepSeek Harness sessions: captures turn activity, exposes share_progress, and injects a live peer-progress digest into every session's prompt.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/en.json",
+    "locale/ja.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "sessions",
+    "progress",
+    "multi-session",
+    "coordination"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

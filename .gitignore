@@ -1,0 +1,55 @@
+# dependencies & build output
+node_modules/
+.pnpm-store/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# local runtime state
+*.log
+*.tmp
+.tmp/
+.dsh-*/
+coverage/
+.vite/
+.cache/
+
+# editor & OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+
+# secrets & local overrides
+.env
+.env.*
+*.local.*
+!*.local.example
+credentials.json
+*.pem
+*.key
+
+# plugin manager artifacts
+.plugin-manager/
+
+# ---------------------------------------------------------------------------
+# 公開しないもの
+# ---------------------------------------------------------------------------
+# 1) 第三者による別プロジェクトのクローン（MIT / hermes-ai-2026）。
+#    自分の著作物ではないため、このリポジトリには含めない。
+dsh-browser-agent/
+
+# 2) DeepSeek Harness 本体のソースを丸ごと複製したもの。
+#    パッチ（turn-cleanup.patch）と README・適用スクリプトだけを公開する。
+dsh-builtin-browser-localfix/orig/
+dsh-builtin-browser-localfix/patched/
+dsh-builtin-browser-localfix/test/
+
+# 3) ローカル固有の設定（絶対パス・認証トークンを含む）と、
+#    第三者リポジトリを保守するための手元スクリプト。
+netlify-mcp/
+netlify-approval-gate/
+update-browser-agent.ps1

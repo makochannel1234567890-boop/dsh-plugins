@@ -1,0 +1,5 @@
+# dsh-deliberation bundle patch: insert the Host plugin into the profile layer stack.
+- insert:
+    - id: deliberation
+      name: 'dsh-deliberation'
+      config: {}

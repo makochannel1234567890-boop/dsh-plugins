@@ -1,0 +1,65 @@
+{
+  "id": "/",
+  "name": "DSH Progress",
+  "short_name": "進捗",
+  "description": "DeepSeek Harness エージェントの進捗をスマホで見るライブ画面",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#070b16",
+  "theme_color": "#0b1020",
+  "categories": ["productivity", "developer", "utilities"],
+  "prefer_related_applications": false,
+  "launch_handler": { "client_mode": "focus-existing" },
+  "handle_links": "preferred",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "いまの進捗",
+      "short_name": "進捗",
+      "url": "/",
+      "description": "進捗バーとステップを開く"
+    },
+    {
+      "name": "ログ",
+      "short_name": "ログ",
+      "url": "/#logsCard",
+      "description": "直近のイベントログを開く"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="DSH Progress">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1224"/>
+      <stop offset="1" stop-color="#151e37"/>
+    </linearGradient>
+    <linearGradient id="barLow" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="barMid" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="barHigh" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#a855f7"/>
+      <stop offset="1" stop-color="#c084fc"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.28" r="0.72">
+      <stop offset="0" stop-color="#818cf8" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#818cf8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#halo)"/>
+  <rect x="86" y="86" width="340" height="340" rx="76" fill="none" stroke="#1e293b" stroke-width="3"/>
+  <rect x="152" y="292" width="52" height="76" rx="26" fill="url(#barLow)"/>
+  <rect x="230" y="236" width="52" height="132" rx="26" fill="url(#barMid)"/>
+  <rect x="308" y="172" width="52" height="196" rx="26" fill="url(#barHigh)"/>
+  <path d="M152 396h208" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
+</svg>

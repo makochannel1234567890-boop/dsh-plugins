@@ -1,0 +1,10 @@
+# dsh-session-bus-resume bundle patch.
+- insert:
+    - id: session-bus-resume
+      name: 'dsh-session-bus-resume'
+      config:
+        enabled: true
+        resumePrompt: >-
+          （dsh-session-bus）一斉停止が解除されました。停止前に進めていた作業を再開してください。
+          まず session_bus_digest で他セッションの進捗を確認し、共有ファイルは現物を読み直してから続行してください。
+          再開内容を 1〜2 行で share_progress に記録してください。
