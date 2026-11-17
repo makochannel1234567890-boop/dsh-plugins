@@ -194,6 +194,7 @@ $ Invoke-WebRequest https://makochannel1234567890-boop.github.io/dsh-plugins/
   現在のサイトの描画そのもの
 - `git ls-remote --heads origin` → `refs/heads/main = fc8ce72`、`refs/heads/gh-pages = 0e13297`
   （push 済みであることをローカルからではなくリモート側で確認）
-- `https://makochannel1234567890-boop.github.io/dsh-plugins/` は **404**（Pages 未設定のため。
-  `docs/GITHUB-SETUP.md` の 3 を実行すると有効になる）
+- `https://makochannel1234567890-boop.github.io/dsh-plugins/` を 22:30 に叩いた結果は
+  **200 / 12416 bytes**、本文に `dsh-emulator-lab` を含む → **GitHub Pages は有効化済みで、
+  このサイトはもう公開されている**（上の 6-3) に残る 404 は Pages 設定前の記録）
 
