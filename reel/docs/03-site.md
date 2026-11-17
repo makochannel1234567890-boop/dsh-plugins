@@ -192,8 +192,9 @@ $ Invoke-WebRequest https://makochannel1234567890-boop.github.io/dsh-plugins/
 - 撮り直した `01-hero.png` と、コミット済み `reel/media/site/01-hero.png` の画素差は
   **MAD 0.57 / 255（42,625 点サンプル、最大 104）** = 実質同一。つまり保存済みスクショは
   現在のサイトの描画そのもの
-- `git ls-remote --heads origin` → `refs/heads/main = fc8ce72`、`refs/heads/gh-pages = 0e13297`
-  （push 済みであることをローカルからではなくリモート側で確認）
+- `git ls-remote --heads origin`（22:32 時点）→ `main = 7283c48` / `gh-pages = 0e13297`。
+  その後の push を反映した **22:46 時点の最終値は `main = 9f7152c` / `gh-pages = 0e13297`**
+  （本タスクのコミットは `fb0314a` → `bbeaeb6` → `7283c48` → `9f7152c` の 4 本）
 - `https://makochannel1234567890-boop.github.io/dsh-plugins/` を 22:30 に叩いた結果は
   **200 / 12416 bytes**、本文に `dsh-emulator-lab` を含む → **GitHub Pages は有効化済みで、
   このサイトはもう公開されている**（上の 6-3) に残る 404 は Pages 設定前の記録）

@@ -2,8 +2,8 @@
 
 > **2026-11-17 22:30 の実測: Pages は有効化済みで、すでに公開されている。**
 > `https://makochannel1234567890-boop.github.io/dsh-plugins/` → **200 / 12416 bytes**、
-> 本文に 7 プラグイン名を含む。`git ls-remote --heads origin` は
-> `main = 7283c48` / `gh-pages = 0e13297`。
+> 本文に 7 プラグイン名を含む。`git ls-remote --heads origin`（22:46 時点）は
+> `main = 9f7152c` / `gh-pages = 0e13297`。
 > この手順は、Pages を作り直すとき・同じ構成を別リポジトリへ移すときのために残す。
 > 状態確認だけしたいときは **4 のコマンド**を実行すればよい。
 
