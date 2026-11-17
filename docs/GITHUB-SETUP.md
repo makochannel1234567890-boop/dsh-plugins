@@ -1,5 +1,12 @@
 # GitHub Pages でサイトを公開する手順（このリポジトリ用）
 
+> **2026-11-17 22:30 の実測: Pages は有効化済みで、すでに公開されている。**
+> `https://makochannel1234567890-boop.github.io/dsh-plugins/` → **200 / 12416 bytes**、
+> 本文に 7 プラグイン名を含む。`git ls-remote --heads origin` は
+> `main = 7283c48` / `gh-pages = 0e13297`。
+> この手順は、Pages を作り直すとき・同じ構成を別リポジトリへ移すときのために残す。
+> 状態確認だけしたいときは **4 のコマンド**を実行すればよい。
+
 対象: `https://github.com/makochannel1234567890-boop/dsh-plugins`
 公開したいもの: `reel/site/`（DSH 用プラグイン置き場の紹介サイト。静的 HTML/CSS のみ）
 
@@ -44,7 +51,10 @@ git commit -m "docs(reel): add GitHub Pages site and 1080x1920 screenshots"
 > `gh-pages` = `0e132977e321253ccc91ed0f2a287354ceb83143`、中身は `.nojekyll` / `index.html` /
 > `serve.mjs` / `style.css`（`git ls-tree -r --name-only origin/gh-pages` で確認できる）。
 > `main` への push も成功済み（`62162df..fb0314a`）。
-> したがって**次にやるのは 3 の画面操作だけ**。サイトを更新したときだけ、この節をもう一度実行する。
+> **追記（2026-11-17 22:30 に再実測）**: 公開 URL `https://makochannel1234567890-boop.github.io/dsh-plugins/` が
+> HTTP **200**（12416 bytes、本文に `dsh-emulator-lab` を含む）を返した。つまり **3 の Pages 有効化も完了済み**。
+> 未確認なのは Settings → Pages の Source / Branch の**現在値**だけ（`gh` が無いため画面を見ないと確定できない）。
+> サイトを更新したときだけ、この節をもう一度実行する。
 
 ```powershell
 git subtree push --prefix=reel/site origin gh-pages
