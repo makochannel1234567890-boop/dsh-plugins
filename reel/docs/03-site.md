@@ -194,7 +194,10 @@ $ Invoke-WebRequest https://makochannel1234567890-boop.github.io/dsh-plugins/
   現在のサイトの描画そのもの
 - `git ls-remote --heads origin`（22:32 時点）→ `main = 7283c48` / `gh-pages = 0e13297`。
   その後の push を反映した **22:46 時点の最終値は `main = 9f7152c` / `gh-pages = 0e13297`**
-  （本タスクのコミットは `fb0314a` → `bbeaeb6` → `7283c48` → `9f7152c` の 4 本）
+  （コミット系列: サイト初版 `fb0314a` → 資料修正 `bbeaeb6` / `7283c48` / `9f7152c` / `28f9833` → 本追記）
+- `git diff --stat origin/gh-pages $(git rev-parse HEAD:reel/site)` → **差分 0**。
+  つまり `gh-pages`（公開中のもの）と現在の `reel/site` は同一で、
+  `git ls-tree -r origin/gh-pages` は `.nojekyll / index.html / serve.mjs / style.css` の 4 ファイル
 - `https://makochannel1234567890-boop.github.io/dsh-plugins/` を 22:30 に叩いた結果は
   **200 / 12416 bytes**、本文に `dsh-emulator-lab` を含む → **GitHub Pages は有効化済みで、
   このサイトはもう公開されている**（上の 6-3) に残る 404 は Pages 設定前の記録）
