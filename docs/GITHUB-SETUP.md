@@ -40,6 +40,12 @@ git commit -m "docs(reel): add GitHub Pages site and 1080x1920 screenshots"
 
 `reel/site/` の中身だけを、そのまま `gh-pages` ブランチの**ルート**として push する。
 
+> **2026-11-17 時点の状態: この配信は実行済みで成功している。**
+> `gh-pages` = `0e132977e321253ccc91ed0f2a287354ceb83143`、中身は `.nojekyll` / `index.html` /
+> `serve.mjs` / `style.css`（`git ls-tree -r --name-only origin/gh-pages` で確認できる）。
+> `main` への push も成功済み（`62162df..fb0314a`）。
+> したがって**次にやるのは 3 の画面操作だけ**。サイトを更新したときだけ、この節をもう一度実行する。
+
 ```powershell
 git subtree push --prefix=reel/site origin gh-pages
 ```

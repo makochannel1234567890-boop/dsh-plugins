@@ -119,6 +119,57 @@ $bmp.Save('reel\media\site\03-dsh-fanout.png', [System.Drawing.Imaging.ImageForm
 - GitHub Pages の有効化は repo settings が必要なので `docs/GITHUB-SETUP.md` に手順を書いた
   （推奨は `gh-pages` ブランチ配信。サイトのソースを二重に持たないため）
 
-### push の記録
+### push の記録（実際の出力）
 
-（この節は push 実行後に実際の出力で追記する）
+実行は 2026-11-17 21:51〜21:52、`GIT_TERMINAL_PROMPT=0` / `GCM_INTERACTIVE=Never` で対話待ちを止めて実行。
+Windows 資格情報マネージャに保存済みの GitHub 資格情報がそのまま使われ、**どちらも成功**した。
+
+1) `main` へのコミット＆push
+
+```
+$ git commit -m "docs(reel): add GitHub Pages site and 1080x1920 screenshots"
+[main fb0314a] docs(reel): add GitHub Pages site and 1080x1920 screenshots
+ 17 files changed, ...
+
+$ git push origin main
+To https://github.com/makochannel1234567890-boop/dsh-plugins.git
+   62162df..fb0314a  main -> main
+EXIT=0
+```
+
+→ リポジトリの `main` に、サイト本体（4 ファイル）・スクショ 11 枚・このドキュメントが入った。
+
+2) `gh-pages` ブランチへの配信（サイトの中身だけをルートに置く）
+
+```
+$ git subtree push --prefix=reel/site origin gh-pages
+git push using:  origin gh-pages
+To https://github.com/makochannel1234567890-boop/dsh-plugins.git
+ * [new branch]      0e132977e321253ccc91ed0f2a287354ceb83143 -> gh-pages
+EXIT=0
+```
+
+`gh-pages` の中身を確認:
+
+```
+$ git ls-tree -r --name-only 0e132977e321253ccc91ed0f2a287354ceb83143
+.nojekyll
+index.html
+serve.mjs
+style.css
+```
+
+→ **Pages の配信元（`gh-pages` / `(root)`）はもう用意できている。**
+残るのは GitHub の画面で Settings → Pages を有効化する操作だけで、
+その手順は `docs/GITHUB-SETUP.md` の「3. GitHub の画面で Pages を有効化する」。
+
+3) 公開 URL の現状（有効化前なので 404）
+
+```
+$ Invoke-WebRequest https://makochannel1234567890-boop.github.io/dsh-plugins/
+404 Not Found
+```
+
+→ これは想定どおり（Pages 未設定）。設定後に 200 と 7 プラグイン名が出れば公開成功。
+
+> サイトを更新したら `git subtree push --prefix=reel/site origin gh-pages` をもう一度実行する。
