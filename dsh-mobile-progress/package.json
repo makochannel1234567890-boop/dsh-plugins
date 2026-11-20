@@ -1,19 +1,22 @@
 {
   "name": "@local/dsh-mobile-progress",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "Live agent progress on the phone as an installable PWA: a Host plugin serves a progress bar over SSE, exposes a public HTTPS URL through a cloudflared tunnel (so the phone works off the LAN), and keeps the PC awake while the feed is live.",
+  "description": "Live agent progress on the phone: a resident left-sidebar panel shows the QR code, LAN and tunnel URLs, and the live progress bar as a step checklist, while a Host plugin serves the same feed as an installable PWA over SSE, starts a new DSH session from a workspace chosen on the phone, exposes a public HTTPS URL through a cloudflared tunnel, and keeps the PC awake while the feed is live.",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
+    "client.js",
     "lib",
+    "vendor",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
@@ -43,6 +46,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
     }
   }
 }

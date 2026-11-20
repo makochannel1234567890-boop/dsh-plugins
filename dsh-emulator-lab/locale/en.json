@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "Emulator Lab",
+    "description": "Boot Android AVDs and iOS Simulators from the sidebar, then estimate low-end phone FPS from a deterministic SoC model (INT8 TOPS, memory bandwidth and capacity, CPU/GPU scores, thermal budget)."
+  },
+  "tools": {
+    "emulator_detect": {
+      "title": "Detect emulators",
+      "description": "Report the emulator tooling on this machine plus the SoC and device profile ids this plugin offers."
+    },
+    "emulator_launch": {
+      "title": "Launch emulator",
+      "description": "Boot an Android AVD or iOS Simulator for a low-end device profile, with RAM, heap and cores clamped to its SoC."
+    },
+    "emulator_fps": {
+      "title": "Emulator FPS",
+      "description": "Estimate FPS deterministically from the SoC model, or measure the running emulator."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "エミュレーターラボ",
+    "description": "右サイドバーから Android AVD / iOS Simulator を起動し、SoC の決定的な性能モデル（INT8 TOPS・メモリ帯域と容量・CPU/GPU スコア・発熱）からローエンド端末の FPS を推定します。"
+  },
+  "tools": {
+    "emulator_detect": {
+      "title": "エミュレーター検出",
+      "description": "この PC のエミュレーター関連ツールと、指定できる SoC・端末プロファイルの ID を返します。"
+    },
+    "emulator_launch": {
+      "title": "エミュレーター起動",
+      "description": "ローエンド向け端末プロファイルで Android AVD / iOS Simulator を起動します（RAM・ヒープ・コア数は SoC 上限でクランプ）。"
+    },
+    "emulator_fps": {
+      "title": "エミュレーター FPS",
+      "description": "SoC モデルから決定的に FPS を推定するか、起動中のエミュレーターから実測します。"
+    }
+  }
+}

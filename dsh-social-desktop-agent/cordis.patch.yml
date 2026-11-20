@@ -1,0 +1,8 @@
+# dsh-social-desktop-agent bundle patch.
+#
+# `id` must be unique inside the profile. The `config` object becomes the second
+# argument of `apply(ctx, config)` in index.js.
+- insert:
+    - id: social-desktop-agent
+      name: 'dsh-social-desktop-agent'
+      config: {}

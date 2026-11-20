@@ -22,6 +22,8 @@ import {
   normalizeTasks,
   packTasks,
   packingCovers,
+  phaseOf,
+  progressOf,
   truncate,
 } from '../lib/plan.js'
 
@@ -349,6 +351,41 @@ test('truncate: hard cap including the ellipsis', () => {
   assert.equal(truncate('abc', 10), 'abc')
   assert.equal(truncate(undefined, 4), '')
   assert.equal(truncate('abcdef', 6), 'abcdef')
+})
+
+// ---------------------------------------------------------------------------
+// progressOf / phaseOf — the sidebar progress board's numbers
+// ---------------------------------------------------------------------------
+
+test('progressOf: workers are 85%, integration is the last 15%', () => {
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 0, integratorState: '', status: 'running' }), 0)
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 2, integratorState: '', status: 'running' }), 43)
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 4, integratorState: '', status: 'running' }), 85)
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 4, integratorState: 'running', status: 'integrating' }), 90)
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 4, integratorState: 'settled', status: 'completed' }), 100)
+})
+
+test('progressOf: terminal runs never linger above what they reached', () => {
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 4, integratorState: 'settled', status: 'completed' }), 100)
+  // A stopped run reports the worker share it actually reached, not 100.
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 3, integratorState: 'stopped', status: 'stopped' }), 64)
+  assert.equal(progressOf({ totalWorkers: 4, settledWorkers: 4, integratorState: '', status: 'failed' }), 85)
+})
+
+test('progressOf: clamps junk instead of emitting NaN or >100', () => {
+  assert.equal(progressOf({ totalWorkers: 0, settledWorkers: 0, integratorState: '', status: 'running' }), 0)
+  assert.equal(progressOf({ totalWorkers: 2, settledWorkers: 99, integratorState: '', status: 'running' }), 85)
+  assert.equal(progressOf({}), 0)
+  assert.equal(progressOf({ totalWorkers: 3, settledWorkers: 1, integratorState: 'settled', status: 'running' }), 100)
+})
+
+test('phaseOf: maps run status + integrator state to one stage', () => {
+  assert.equal(phaseOf({ status: 'running', integratorState: '' }), 'workers')
+  assert.equal(phaseOf({ status: 'integrating', integratorState: 'running' }), 'integrating')
+  assert.equal(phaseOf({ status: 'completed', integratorState: 'settled' }), 'done')
+  assert.equal(phaseOf({ status: 'failed', integratorState: '' }), 'failed')
+  assert.equal(phaseOf({ status: 'stopped', integratorState: 'stopped' }), 'stopped')
+  assert.equal(phaseOf({}), 'workers')
 })
 
 // ---------------------------------------------------------------------------

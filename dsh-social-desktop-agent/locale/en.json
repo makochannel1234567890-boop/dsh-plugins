@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Social + desktop control (scope-gated)",
+    "description": "Read allowlisted social pages and observe/operate the local Windows desktop — cursor and key input, app launch and (triple-gated, dry-run by default) power operations — under explicit scopes, a permanent ban on write-type social actions, an allowlist, an append-only audit log and a kill switch."
+  }
+}

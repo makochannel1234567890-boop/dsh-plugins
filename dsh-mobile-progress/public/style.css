@@ -28,6 +28,10 @@
     --text: #0f172a;
     --muted: #5b6a86;
     --faint: #8695b0;
+    /* Deeper state colours keep body-size text at >= 4.5:1 on the light surface. */
+    --ok: #0f766e;
+    --warn: #a16207;
+    --err: #be123c;
     --shadow: 0 18px 50px -26px rgba(30, 41, 59, 0.35);
     color-scheme: light;
   }
@@ -738,4 +742,244 @@ code {
 
 .toast[hidden] {
   display: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Compose a session from the phone / final result (v0.3.0)
+ * ------------------------------------------------------------------------- */
+
+.compose .card-head,
+.result .card-head {
+  margin-bottom: 4px;
+}
+
+.compose h2,
+.result h2 {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--text);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 14px;
+}
+
+.field-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+.compose select,
+.compose textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-solid);
+  color: var(--text);
+  font-family: inherit;
+  /* 16px keeps iOS from zooming the whole page when the field gets focus. */
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.compose textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.compose select:disabled,
+.compose textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.field-hint[hidden],
+.compose-status[hidden] {
+  display: none;
+}
+
+/* fan-out toggle: a full-width tap target, not a bare checkbox, because this
+ * row is the phone's only way to ask for a fan-out run. */
+.fanout-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-solid);
+  cursor: pointer;
+}
+
+.fanout-toggle:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.fanout-toggle input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.fanout-toggle input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fanout-copy {
+  display: block;
+  min-width: 0;
+}
+
+.fanout-copy strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.fanout-copy small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.compose .btn {
+  margin-top: 14px;
+  min-height: 48px;
+}
+
+.compose-status {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.compose-status[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.compose-status[data-tone="error"] {
+  color: var(--err);
+  font-weight: 600;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn:disabled:active {
+  transform: none;
+}
+
+/* ---------- final result ---------- */
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.badge[data-state="live"] {
+  color: var(--accent);
+  border-color: rgba(34, 211, 238, 0.32);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.badge[data-state="ready"] {
+  color: var(--ok);
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.result-text {
+  margin: 8px 0 0;
+  max-height: 70vh;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  /* The result is verbatim assistant text: keep its newlines, wrap long tokens. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.result-meta {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- touch targets / keyboard focus ---------- */
+
+.btn,
+.compose select,
+.compose textarea,
+details.card summary {
+  min-height: 44px;
+}
+
+details.card summary {
+  padding: 8px 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 380px) {
+  .app {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .card {
+    padding: 15px;
+  }
+
+  .compose h2,
+  .result h2 {
+    font-size: 13px;
+  }
 }

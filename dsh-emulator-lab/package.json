@@ -1,0 +1,57 @@
+{
+  "name": "dsh-emulator-lab",
+  "version": "0.1.0",
+  "description": "Boot Android AVDs and iOS Simulators from the DSH sidebar and estimate low-end phone FPS from a deterministic SoC model (INT8 TOPS, memory bandwidth and capacity, CPU/GPU scores, thermal budget).",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "lib",
+    "client",
+    "locale",
+    "icon.svg",
+    "README.md",
+    "tools"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "emulator",
+    "android",
+    "avd",
+    "ios",
+    "simulator",
+    "soc",
+    "tops",
+    "fps",
+    "performance",
+    "benchmark",
+    "thermal"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "selfcheck": "node tools/selfcheck.mjs",
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  }
+}

@@ -41,6 +41,19 @@ import {
   withToken,
   findPublicUrl,
 } from './lib/tunnel.js'
+import { qrMatrix } from './lib/qr.js'
+import {
+  describeError,
+  isJsonContentType,
+  readJsonBody,
+  withTimeout,
+} from './lib/session-control.js'
+import {
+  extractAssistantText,
+  findWorkspace,
+  loadWorkspaces,
+  validatePrompt,
+} from './lib/workspaces.js'
 
 export const name = 'mobile-progress'
 
@@ -54,6 +67,15 @@ const PUBLIC_DIR = path.join(HERE, 'public')
 const SECTION_NAME = 'tool:mobile-progress'
 /** Just below the goal section, above the workflow section. */
 const SECTION_ORDER = 2350
+
+/**
+ * Same-origin bridge the left-sidebar panel reads.
+ *
+ * The phone page lives on its own listener (`settings.port`), which the Web page
+ * cannot read without CORS and a token. Mounting the same state under the Web
+ * server's origin keeps the panel same-origin and keeps the LAN port out of it.
+ */
+const UI_BRIDGE_PREFIX = '/mobile-progress-api'
 
 const PROMPT_SECTION = `## Phone progress feed (dsh-mobile-progress)
 
@@ -83,7 +105,27 @@ const DEFAULT_CONFIG = Object.freeze({
   persist: true,
   storeDir: '',
   maxLogs: 40,
+  /**
+   * `POST /api/session`: start a new session from the phone. `workspacesFile`
+   * is the Host's own workspace ledger, read-only; an empty value means its
+   * default location (`~/.dsh/storages/workspace.json`).
+   */
+  control: Object.freeze({
+    enabled: true,
+    workspacesFile: '',
+    maxPromptChars: 8000,
+    resultMaxChars: 4000,
+  }),
 })
+
+/** How many workspaces `GET /api/workspaces` will return at most. */
+const MAX_WORKSPACE_ITEMS = 50
+
+/** Body cap for `POST /api/session`; the prompt is plain text. */
+const MAX_SESSION_BODY_BYTES = 64 * 1024
+
+/** A `controller.prompt()` that has not settled by then is abandoned. */
+const SESSION_PROMPT_TIMEOUT_MS = 15_000
 
 const MIME_TYPES = Object.freeze({
   '.html': 'text/html; charset=utf-8',
@@ -298,6 +340,20 @@ function resolveConfig(input) {
       ? tunnelInput
       : { ...tunnelObject, ...(keepAwakeInput !== undefined ? { keepAwake: keepAwakeInput } : {}) },
   )
+  const controlInput = raw.control !== null && typeof raw.control === 'object' ? raw.control : {}
+  const control = {
+    enabled: controlInput.enabled !== false,
+    workspacesFile:
+      typeof controlInput.workspacesFile === 'string' && controlInput.workspacesFile.trim().length > 0
+        ? controlInput.workspacesFile.trim()
+        : DEFAULT_CONFIG.control.workspacesFile,
+    maxPromptChars: Number.isFinite(Number(controlInput.maxPromptChars))
+      ? clamp(Math.trunc(Number(controlInput.maxPromptChars)), 1, 200_000)
+      : DEFAULT_CONFIG.control.maxPromptChars,
+    resultMaxChars: Number.isFinite(Number(controlInput.resultMaxChars))
+      ? clamp(Math.trunc(Number(controlInput.resultMaxChars)), 100, 200_000)
+      : DEFAULT_CONFIG.control.resultMaxChars,
+  }
   return {
     enabled: raw.enabled !== false,
     port: clamp(port, 1024, 65535),
@@ -312,6 +368,7 @@ function resolveConfig(input) {
       : DEFAULT_CONFIG.maxLogs,
     tunnel,
     keepAwake: tunnel.keepAwake,
+    control,
   }
 }
 
@@ -327,6 +384,15 @@ export function apply(ctx, config = {}) {
     claimedSessionId: null,
     session: null,
     server: null,
+    /** Removes the Web-server route; set when this composition has a webServer. */
+    disposeUiBridge: null,
+    /**
+     * Mount status of the sidebar bridge. Reported in `progress_status` so a
+     * missing panel is diagnosable without guessing: when it is not mounted the
+     * panel reads nothing and prints 「トンネル未接続」 even though the phone
+     * feed and its tunnel are healthy.
+     */
+    bridge: { mounted: false, path: UI_BRIDGE_PREFIX, error: '' },
     port: 0,
     urls: [],
     lanUrls: [],
@@ -340,6 +406,8 @@ export function apply(ctx, config = {}) {
     saveInFlight: false,
     dirty: false,
     tokenSource: 'none',
+    /** How many workspaces the last `GET /api/workspaces` returned. */
+    workspaceCount: 0,
     tunnelChild: null,
     tunnelRestartTimer: null,
     awakeChild: null,
@@ -379,6 +447,10 @@ export function apply(ctx, config = {}) {
       cwdName: cwd ? path.basename(String(cwd)) : '',
       manualStatus: false,
       manualPercent: false,
+      /** Final assistant text of the last turn, folded for the phone. */
+      result: null,
+      /** `none` until an assistant message with text has been folded. */
+      resultState: 'none',
     }
   }
 
@@ -427,6 +499,8 @@ export function apply(ctx, config = {}) {
       lastTool: session.lastTool,
       agentRunning: session.agentRunning,
       cwdName: session.cwdName,
+      result: session.result ?? null,
+      resultState: session.resultState === 'ready' ? 'ready' : 'none',
       stale: Date.now() - session.updatedAt > 15 * 60 * 1000,
     }
     return {
@@ -458,6 +532,16 @@ export function apply(ctx, config = {}) {
           pid: runtime.keepAwake.pid,
           error: runtime.keepAwake.error,
         },
+        control: {
+          enabled: settings.control.enabled,
+          available: controlAvailable(),
+          workspaces: runtime.workspaceCount,
+        },
+        bridge: {
+          mounted: runtime.bridge.mounted,
+          path: runtime.bridge.path,
+          error: runtime.bridge.error,
+        },
       },
       session: selected,
     }
@@ -465,6 +549,225 @@ export function apply(ctx, config = {}) {
 
   function primaryUrl() {
     return runtime.urls[0] ?? `http://127.0.0.1:${runtime.port || settings.port}/`
+  }
+
+  // -- session control: phone -> new session ---------------------------------
+
+  /** The Host's `sessionController` service, if this composition has one. */
+  function controlService() {
+    try {
+      const service = ctx.get('sessionController')
+      return service !== undefined && service !== null ? service : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Both halves are required: create the session, then prompt it. */
+  function controlAvailable() {
+    const service = controlService()
+    return (
+      service !== undefined &&
+      typeof service.create === 'function' &&
+      typeof service.prompt === 'function'
+    )
+  }
+
+  /** The workspace list shape the phone relies on, defensively normalized. */
+  function normalizeWorkspace(item) {
+    const workspacePath = typeof item?.path === 'string' ? item.path.trim() : ''
+    const rawTitle = typeof item?.title === 'string' ? item.title.trim() : ''
+    return {
+      id: typeof item?.id === 'string' ? item.id : String(item?.id ?? ''),
+      title: rawTitle.length > 0 ? rawTitle : path.win32.basename(workspacePath),
+      path: workspacePath,
+      updatedAt: Number(item?.updatedAt) || 0,
+      sessionCount: Number(item?.sessionCount) || 0,
+      exists: item?.exists === true,
+    }
+  }
+
+  /**
+   * Read the Host's workspace ledger for the phone.
+   *
+   * A broken or unreadable ledger is not an HTTP error: the page still has to
+   * render, so the list comes back empty and `error` explains why.
+   */
+  async function listWorkspaces() {
+    let loaded = null
+    try {
+      loaded = await loadWorkspaces(settings.control.workspacesFile, { maxItems: MAX_WORKSPACE_ITEMS })
+    } catch (error) {
+      log(`workspace ledger unavailable: ${describeError(error)}`)
+      runtime.workspaceCount = 0
+      return { workspaces: [], error: 'read_failed' }
+    }
+    const items = Array.isArray(loaded?.workspaces) ? loaded.workspaces : []
+    const workspaces = items.slice(0, MAX_WORKSPACE_ITEMS).map(normalizeWorkspace)
+    runtime.workspaceCount = workspaces.length
+    const error = loaded?.error === null || loaded?.error === undefined ? '' : String(loaded.error)
+    return { workspaces, error }
+  }
+
+  /** Answer a control error in the shape the phone page branches on. */
+  function sendControlError(res, error) {
+    const code = typeof error?.code === 'string' && error.code.length > 0 ? error.code : 'internal_error'
+    const status = Number.isFinite(Number(error?.status)) ? Math.trunc(Number(error.status)) : 500
+    const message = typeof error?.message === 'string' && error.message.length > 0 ? error.message : code
+    sendJson(res, status, { ok: false, error: code, message: truncate(message, 200) })
+  }
+
+  /**
+   * `POST /api/session` — create an ordinary session in a workspace and send
+   * the prompt typed on the phone.
+   *
+   * The checks run in the documented order (media type, size, prompt, feature
+   * flag, workspace, service) so the page can rely on one code per condition.
+   */
+  async function handleCreateSession(req, res) {
+    if (!isJsonContentType(req.headers['content-type'])) {
+      sendControlError(res, {
+        code: 'unsupported_media_type',
+        message: 'content-type must be application/json',
+        status: 415,
+      })
+      return
+    }
+
+    let body
+    try {
+      body = await readJsonBody(req, { maxBytes: MAX_SESSION_BODY_BYTES })
+    } catch (error) {
+      sendControlError(res, error)
+      return
+    }
+    const payload = body !== null && typeof body === 'object' && !Array.isArray(body) ? body : {}
+
+    const verdict = validatePrompt(payload.prompt, { maxChars: settings.control.maxPromptChars })
+    if (!verdict.ok) {
+      sendControlError(res, {
+        code: verdict.code,
+        message:
+          verdict.code === 'prompt_too_long'
+            ? `prompt exceeds ${settings.control.maxPromptChars} characters`
+            : 'prompt is required',
+        status: 400,
+      })
+      return
+    }
+
+    if (!settings.control.enabled) {
+      sendControlError(res, {
+        code: 'control_disabled',
+        message: 'starting sessions from the phone is disabled',
+        status: 403,
+      })
+      return
+    }
+
+    const workspaceId = typeof payload.workspaceId === 'string' ? payload.workspaceId.trim() : ''
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd.trim() : ''
+    if (workspaceId.length === 0 && cwd.length === 0) {
+      sendControlError(res, {
+        code: 'workspace_required',
+        message: 'workspaceId or cwd is required',
+        status: 400,
+      })
+      return
+    }
+
+    const { workspaces, error: ledgerError } = await listWorkspaces()
+    // A given `workspaceId` is authoritative; `cwd` only applies without one.
+    const match =
+      workspaceId.length > 0
+        ? findWorkspace(workspaces, { workspaceId })
+        : findWorkspace(workspaces, { cwd })
+    if (match === undefined || match === null) {
+      if (ledgerError.length > 0) log(`workspace ledger error: ${ledgerError}`)
+      sendControlError(res, {
+        code: 'workspace_not_found',
+        message: 'the requested workspace is not in the ledger',
+        status: 400,
+      })
+      return
+    }
+
+    const controller = controlService()
+    if (!controlAvailable()) {
+      sendControlError(res, {
+        code: 'session_control_unavailable',
+        message: 'sessionController is unavailable in this composition',
+        status: 503,
+      })
+      return
+    }
+
+    let sessionId
+    try {
+      const created = await controller.create({ cwd: match.path })
+      sessionId = created?.sessionId
+      if (typeof sessionId !== 'string' || sessionId.length === 0) {
+        throw new Error('sessionController.create() returned no sessionId')
+      }
+      await withTimeout(
+        (signal) =>
+          controller.prompt(
+            {
+              requestId: `mobile-${Date.now()}-${sessionId}`,
+              sessionId,
+              mode: 'queue',
+              content: [{ type: 'text', text: verdict.text }],
+              clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+            signal,
+          ),
+        SESSION_PROMPT_TIMEOUT_MS,
+        'prompt timed out',
+      )
+    } catch (error) {
+      log(`could not start a session from the phone: ${describeError(error)}`)
+      sendControlError(res, {
+        code: 'session_create_failed',
+        message: 'the Host could not start a session for this workspace',
+        status: 502,
+      })
+      return
+    }
+
+    // Follow the new session instead of whatever was tracked before, so its
+    // events (and final assistant text) land on the phone.
+    const session = claimSession(sessionId, match.path)
+    const firstLine = verdict.text.split('\n').map((line) => line.trim()).find((line) => line.length > 0)
+    session.request = verdict.text
+    session.title = truncate(firstLine ?? verdict.text, 80)
+    session.status = 'working'
+    session.agentRunning = true
+    session.result = null
+    session.resultState = 'none'
+    pushLog(session, 'スマホから依頼を送信')
+    session.updatedAt = Date.now()
+    session.lastActivityAt = session.updatedAt
+    scheduleBroadcast()
+    schedulePersist()
+
+    sendJson(res, 201, {
+      ok: true,
+      session: { id: session.id, short: session.short, cwd: match.path },
+      workspace: { id: match.id, title: match.title, path: match.path },
+    })
+  }
+
+  async function handleWorkspaces(res) {
+    const { workspaces, error } = await listWorkspaces()
+    sendJson(res, 200, {
+      ok: true,
+      workspaces,
+      control: {
+        enabled: settings.control.enabled,
+        available: controlAvailable(),
+        error,
+      },
+    })
   }
 
   // -- broadcasting & persistence -------------------------------------------
@@ -594,6 +897,9 @@ export function apply(ctx, config = {}) {
         }
         break
       case 'user/message': {
+        // A new request means the previous answer is no longer "the result".
+        session.result = null
+        session.resultState = 'none'
         const text = extractMessageText(data.content, 1200)
         const request = cleanUserRequest(text, 400)
         if (request.length > 0) {
@@ -623,8 +929,26 @@ export function apply(ctx, config = {}) {
         break
       }
       case 'tool/result':
-      case 'assistant/message':
         break
+      case 'assistant/message': {
+        // The last assistant message with visible text is what the phone shows
+        // as the answer; intermediate steps overwrite it as they arrive.
+        const folded = extractAssistantText(data.message?.content ?? data.content, {
+          maxChars: settings.control.resultMaxChars,
+        })
+        if (typeof folded?.text === 'string' && folded.text.length > 0) {
+          const turn = Number(data.turn)
+          session.result = {
+            text: folded.text,
+            at: Date.now(),
+            turn: Number.isFinite(turn) ? turn : session.turns,
+            chars: [...folded.text].length,
+            truncated: folded.truncated === true,
+          }
+          session.resultState = 'ready'
+        }
+        break
+      }
       default:
         activity = false
         break
@@ -790,11 +1114,21 @@ export function apply(ctx, config = {}) {
 
     // The app shell (HTML/CSS/JS/icons/manifest) is public: `<script src>` and
     // `<link href>` do not inherit the page query string, so gating them would
-    // break the page itself whenever a token is configured. Only the data
-    // endpoints require the token.
-    const needsToken = url.pathname === '/api/state' || url.pathname === '/api/stream'
-    if (needsToken && !authorized(req, url)) {
+    // break the page itself whenever a token is configured. Every `/api/` data
+    // endpoint requires the token.
+    if (url.pathname.startsWith('/api/') && !authorized(req, url)) {
       sendJson(res, 401, { ok: false, error: 'unauthorized' })
+      return
+    }
+
+    // `POST /api/session` is the only write endpoint; everything else is read.
+    if (url.pathname === '/api/session') {
+      if (method !== 'POST') {
+        res.writeHead(405, { allow: 'POST' })
+        res.end()
+        return
+      }
+      await handleCreateSession(req, res)
       return
     }
 
@@ -811,6 +1145,11 @@ export function apply(ctx, config = {}) {
 
     if (url.pathname === '/api/state') {
       sendJson(res, 200, publicState())
+      return
+    }
+
+    if (url.pathname === '/api/workspaces') {
+      await handleWorkspaces(res)
       return
     }
 
@@ -1278,7 +1617,96 @@ export function apply(ctx, config = {}) {
     presentCall: () => ({ card: 'generic', title: 'Read phone progress', kind: 'other' }),
   })
 
+  // -- web UI bridge: the left-sidebar panel ---------------------------------
+
+  /**
+   * Everything the sidebar panel renders, in one payload.
+   *
+   * `phoneUrl` is the LAN address (same Wi-Fi); `publicUrl` answers from any
+   * network while the tunnel is up. The QR encodes whichever is better for the
+   * user right now, so scanning it is one step instead of typing a token.
+   */
+  function uiBridgeState() {
+    const state = publicState()
+    const lanUrl = runtime.lanUrls[0] ?? primaryUrl()
+    const publicUrl = publicUrlValue()
+    const qrUrl = publicUrl || lanUrl
+    return {
+      ...state,
+      listening: runtime.server !== null && runtime.server.listening === true,
+      port: runtime.port,
+      phoneUrl: lanUrl,
+      publicUrl,
+      qrUrl,
+      qr: qrMatrix(qrUrl),
+      // Hoisted for the panel: both live under `server` in the phone payload,
+      // but the panel header reads them directly.
+      tunnel: state.server.tunnel,
+      keepAwake: state.server.keepAwake,
+    }
+  }
+
+  async function handleUiBridge(req, res) {
+    let url
+    try {
+      url = new URL(req.url ?? '/', 'http://localhost')
+    } catch {
+      sendJson(res, 400, { ok: false, error: 'bad request' })
+      return
+    }
+    if (req.method !== 'GET') {
+      res.writeHead(405, { allow: 'GET' })
+      res.end()
+      return
+    }
+    const rest = url.pathname.slice(UI_BRIDGE_PREFIX.length) || '/'
+    if (rest === '/' || rest === '/state') {
+      sendJson(res, 200, uiBridgeState())
+      return
+    }
+    sendJson(res, 404, { ok: false, error: 'not found' })
+  }
+
   // -- wiring ----------------------------------------------------------------
+
+  // The panel reads through the Web server, which keeps it same-origin. A
+  // composition without one (TUI) simply has no panel, so a missing service is
+  // not an error; a duplicate route throws and is reported instead.
+  //
+  // Resolve the service through `ctx.inject`, never a one-shot `ctx.get`: a
+  // profile composes hundreds of entries in parallel, so at this point in setup
+  // the Web server is normally still undefined. A one-shot read then skipped the
+  // mount in silence, and the panel — the one surface that needs this route —
+  // printed 「トンネル未接続」 while the phone feed and its tunnel ran fine.
+  // `ctx.inject` runs the body once the service exists and re-runs it when the
+  // service is replaced, so the route always follows the live Web server.
+  ctx.inject(['webServer'], (scope) => {
+    try {
+      const dispose = scope.webServer.register({
+        kind: 'prefix',
+        path: UI_BRIDGE_PREFIX,
+        handler: handleUiBridge,
+      })
+      runtime.disposeUiBridge = dispose
+      runtime.bridge.mounted = true
+      runtime.bridge.error = ''
+      log(`mounted the sidebar bridge on ${UI_BRIDGE_PREFIX}`)
+      scope.effect(() => () => {
+        runtime.bridge.mounted = false
+        if (runtime.disposeUiBridge === dispose) runtime.disposeUiBridge = null
+        try {
+          dispose()
+        } catch {
+          // Already removed by the Loader.
+        }
+      })
+    } catch (error) {
+      runtime.disposeUiBridge = null
+      runtime.bridge.mounted = false
+      runtime.bridge.error = describeError(error)
+      log(`could not mount the sidebar bridge: ${runtime.bridge.error}`)
+    }
+  })
 
   const systemPrompt = ctx.get('systemPrompt')
   if (systemPrompt !== undefined) {
@@ -1295,6 +1723,12 @@ export function apply(ctx, config = {}) {
 
   ctx.effect(() => () => {
     runtime.disposed = true
+    try {
+      runtime.disposeUiBridge?.()
+    } catch {
+      // Already removed by the Loader.
+    }
+    runtime.disposeUiBridge = null
     stopTunnel()
     stopKeepAwake()
     if (runtime.broadcastTimer !== null) clearTimeout(runtime.broadcastTimer)

@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto'
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 
-import { clampInt, estimateBudget, expansionPlan, makeRunId, normalizeTasks, packTasks } from './plan.js'
+import { clampInt, estimateBudget, expansionPlan, makeRunId, normalizeTasks, packTasks, phaseOf, progressOf } from './plan.js'
 import { DIVERGENCE_AXES, renderCallerDigest, renderIntegratorBrief, renderProbeBrief, renderWorkerBrief } from './prompts.js'
 import { FanoutStore } from './store.js'
 
@@ -878,22 +878,71 @@ export class FanoutEngine {
     }
   }
 
-  /** Compact state for the UI bridge. */
+  /**
+   * Compact state for the UI bridge, newest run first.
+   *
+   * `runs` is consumed by two surfaces — the composer dock (which reads
+   * `total`/`settled`/`failed`/`estimate_tokens`) and the sidebar progress board
+   * (which reads `percent`/`phase`/`workers`/`integrator_state`). Keep both sets
+   * of fields here so the board never has to re-derive a number the dock shows
+   * differently.
+   */
   uiState() {
     const runs = [...this.runs.values()]
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, 8)
-      .map((run) => ({
-        run_id: run.id,
-        status: run.status,
-        total: run.workers.length,
-        settled: run.workers.filter((worker) => worker.state !== 'running' && worker.state !== 'pending').length,
-        failed: run.workers.filter((worker) => worker.state === 'failed').length,
-        updated_at: new Date(run.updatedAt).toISOString(),
-        objective: run.objective.slice(0, 160),
-        estimate_tokens: run.estimate?.approx_tokens ?? 0,
-      }))
+      .map((run) => this.uiRun(run))
     const active = runs.find((run) => !TERMINAL.has(run.status))
     return { runs, active_run_id: active?.run_id }
+  }
+
+  /** One run as the progress board renders it. Never throws on partial state. */
+  uiRun(run) {
+    const workers = Array.isArray(run.workers) ? run.workers : []
+    const total = workers.length
+    const settled = workers.filter((worker) => worker.state !== 'running' && worker.state !== 'pending').length
+    const failed = workers.filter((worker) => worker.state === 'failed').length
+    const integratorState = typeof run.integrator?.state === 'string' ? run.integrator.state : ''
+    const tasksById = new Map(
+      (Array.isArray(run.tasks) ? run.tasks : []).map((task) => [task.id, task]),
+    )
+    return {
+      run_id: run.id,
+      status: run.status,
+      total,
+      settled,
+      failed,
+      updated_at: Number.isFinite(run.updatedAt) ? new Date(run.updatedAt).toISOString() : '',
+      created_at: Number.isFinite(run.createdAt) ? new Date(run.createdAt).toISOString() : '',
+      objective: String(run.objective ?? '').slice(0, 160),
+      estimate_tokens: run.estimate?.approx_tokens ?? 0,
+      // --- progress board ---
+      percent: progressOf({ totalWorkers: total, settledWorkers: settled, integratorState, status: run.status }),
+      phase: phaseOf({ status: run.status, integratorState }),
+      integrator_state: integratorState,
+      integrate: run.integrateRequested !== false,
+      cwd: String(run.cwd ?? ''),
+      final_path: String(run.finalPath ?? ''),
+      error: run.error ? String(run.error) : undefined,
+      // `worker_details` (not `workers`): the dock already reads a numeric
+      // `workers` slider value off some Hosts, and one name must not mean two
+      // things across the wire.
+      worker_details: workers.map((worker) => ({
+        index: worker.index,
+        state: worker.state,
+        weight: worker.weight,
+        session_id: worker.sessionId,
+        summary: typeof worker.summary === 'string' ? worker.summary.slice(0, 160) : '',
+        error: worker.error ? String(worker.error) : undefined,
+        tasks: (Array.isArray(worker.taskIds) ? worker.taskIds : []).map((id) => {
+          const task = tasksById.get(id)
+          return {
+            id,
+            title: typeof task?.title === 'string' ? task.title : id,
+            weight: typeof task?.weight === 'number' ? task.weight : 0,
+          }
+        }),
+      })),
+    }
   }
 }

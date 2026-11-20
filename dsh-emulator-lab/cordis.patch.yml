@@ -1,0 +1,7 @@
+# dsh-emulator-lab bundle patch: insert the Host plugin into the profile layer stack.
+#
+# The `config` object becomes the second argument of `apply(ctx, config)` in index.js.
+- insert:
+    - id: emulator-lab
+      name: 'dsh-emulator-lab'
+      config: {}

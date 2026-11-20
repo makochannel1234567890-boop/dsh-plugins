@@ -162,3 +162,42 @@ export function packingCovers(tasks, buckets) {
   const actual = buckets.flatMap((bucket) => bucket.taskIds).sort()
   return expected.length === actual.length && expected.every((id, index) => id === actual[index])
 }
+
+/**
+ * One run's progress as an integer 0–100, for the progress board.
+ *
+ * The split is a stated convention, not a measurement: finishing every worker is
+ * 85% of the run, and the integrator (which merges, verifies and builds) is the
+ * remaining 15%. That keeps a 5-worker run from reading "100%" while the
+ * integration step is still the thing the user is waiting for.
+ *
+ * Once every worker has settled the floor is 90, because integration *is* the
+ * remaining work at that point. `completed` pins to 100 so a finished run never
+ * lingers at 92%; `failed` and `stopped` report the worker share actually
+ * reached, because claiming 100% for a stopped run is a lie the badge contradicts.
+ */
+export function progressOf({ totalWorkers, settledWorkers, integratorState, status }) {
+  const total = Math.max(0, Math.floor(Number(totalWorkers) || 0))
+  const settled = Math.min(total, Math.max(0, Math.floor(Number(settledWorkers) || 0)))
+  const workerShare = total === 0 ? 0 : Math.round((settled / total) * 85)
+  const outcome = String(status ?? '')
+  const integrator = String(integratorState ?? '')
+
+  if (outcome === 'completed') return 100
+  if (outcome === 'failed' || outcome === 'stopped') return workerShare
+  if (integrator === 'settled') return 100
+  if (integrator === 'running' || integrator === 'failed') return Math.max(90, workerShare)
+  return workerShare
+}
+
+/** Coarse stage of one run, for the stage strip on the progress board. */
+export function phaseOf({ status, integratorState }) {
+  const outcome = String(status ?? '')
+  const integrator = String(integratorState ?? '')
+  if (outcome === 'failed') return 'failed'
+  if (outcome === 'stopped') return 'stopped'
+  if (outcome === 'completed') return 'done'
+  if (integrator === 'running') return 'integrating'
+  if (integrator === 'settled') return 'done'
+  return 'workers'
+}

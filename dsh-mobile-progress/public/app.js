@@ -50,6 +50,19 @@ const els = {
   footerPort: $('footerPort'),
   offlineBar: $('offlineBar'),
   toast: $('toast'),
+  composeCard: $('composeCard'),
+  workspaceSelect: $('workspaceSelect'),
+  workspacePath: $('workspacePath'),
+  fanoutToggle: $('fanoutToggle'),
+  promptInput: $('promptInput'),
+  promptCount: $('promptCount'),
+  startBtn: $('startBtn'),
+  composeStatus: $('composeStatus'),
+  progressCard: $('progressCard'),
+  resultCard: $('resultCard'),
+  resultBadge: $('resultBadge'),
+  resultText: $('resultText'),
+  resultMeta: $('resultMeta'),
 }
 
 const STATUS_LABEL = {
@@ -62,6 +75,20 @@ const STATUS_LABEL = {
 
 const STORAGE_KEY = 'dsh-progress:last-state'
 const STORAGE_MAX_AGE = 7 * 24 * 60 * 60 * 1000
+const PROMPT_MAX = 8000
+
+/**
+ * Appended to the prompt when the phone's fan-out toggle is on.
+ *
+ * The fan-out Host plugin already explains `fanout_start` in its prompt
+ * section; this line carries the one thing that section cannot know: the
+ * person ticked the fan-out toggle for *this* prompt on the phone. It is
+ * plain prompt text on purpose — arming the composer checkbox is Host state,
+ * and the phone server cannot set it, so the request is phrased as an
+ * instruction the receiving session can act on without a plugin reload.
+ */
+const FANOUT_DIRECTIVE =
+  '【fan-out 指示】この依頼はスマホの fan-out トグルから送信されました。独立した作業が3つ以上あり、並列に進められるなら fanout_start で分解して実行してください（workers と expansion はこの依頼に必要な値まで上げること）。単一作業や直列の連鎖なら、このセッションのまま実行し、その判断を1行で述べてください。'
 
 let lastState = null
 let stepSignature = ''
@@ -73,6 +100,11 @@ let reconnectTimer = null
 let retryDelay = 1000
 let deferredPrompt = null
 let toastTimer = null
+let composeReady = false
+let composeBusy = false
+let renderedSessionId = null
+let workspaceChoices = []
+let sessionStartAt = 0
 
 const search = () => location.search
 
@@ -215,6 +247,18 @@ function render(data) {
   lastState = data
   saveSnapshot(data)
 
+  // A different session id means a different run, so drop the cached list
+  // signatures: the step and log lists must repaint even when their first frame
+  // happens to look identical.
+  const sessionId = data.session?.id ? String(data.session.id) : null
+  const switched = sessionId !== null && renderedSessionId !== null && sessionId !== renderedSessionId
+  if (switched) {
+    stepSignature = ''
+    logSignature = ''
+    if (Date.now() - sessionStartAt > 10000) toast('新しいセッションを表示中')
+  }
+  renderedSessionId = sessionId
+
   const session = data.session || null
   const percent = session ? session.percent : null
   const indeterminate = percent === null || percent === undefined || !Number.isFinite(Number(percent))
@@ -259,6 +303,7 @@ function render(data) {
 
   setSteps(session?.steps || [])
   setLogs(session?.logs || [])
+  renderResult(session)
   renderReach(data)
 
   text(els.updatedAgo, session ? ago(session.updatedAt) : '—')
@@ -286,6 +331,7 @@ async function fetchState({ quiet = false } = {}) {
     const response = await fetch(`/api/state${search()}`, { cache: 'no-store' })
     if (response.status === 401) {
       els.requestCard.hidden = true
+      disableCompose('アクセストークンが必要です。この画面の URL の ?k= を確認してください。')
       setConn('offline', 'トークンが必要')
       text(els.currentStep, 'この画面を開くにはアクセストークンが必要です。PC 側の progress_status が出す ?k=… 付き URL を開いてください。')
       setOffline(true, 'アクセストークンがありません')
@@ -336,6 +382,8 @@ function connect() {
     sseOpen = true
     retryDelay = 1000
     markSynced()
+    // Reconnects pick up workspace list changes made on the PC in the meantime.
+    void loadWorkspaces({ quiet: true })
   }
 
   source.onmessage = (event) => {
@@ -374,6 +422,317 @@ function tick() {
     setConn('offline', '再接続中…')
     scheduleReconnect()
   }
+}
+
+// -- compose: start a session from the phone ---------------------------------
+
+/**
+ * The last segment of a workspace path.
+ *
+ * A phone-sized <select> cannot show a Windows path, and the leaf directory is
+ * the part a person names the workspace by. The full path stays available as
+ * the option's `title` attribute for a desktop hover, so nothing is lost.
+ */
+function pathLeaf(value) {
+  const raw = String(value ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
+  if (raw.length === 0) return ''
+  const parts = raw.split('/').filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1] : raw
+}
+
+function prefersReducedMotion() {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    return false
+  }
+}
+
+function setComposeStatus(message, tone = 'info') {
+  if (!els.composeStatus) return
+  const next = String(message ?? '')
+  text(els.composeStatus, next)
+  els.composeStatus.hidden = next.length === 0
+  els.composeStatus.dataset.tone = tone
+}
+
+function setComposeEnabled(enabled) {
+  composeReady = enabled
+  if (!els.workspaceSelect || !els.startBtn) return
+  els.workspaceSelect.disabled = !enabled
+  if (els.fanoutToggle) els.fanoutToggle.disabled = !enabled
+  els.startBtn.disabled = !enabled || composeBusy
+}
+
+function disableCompose(message, tone = 'error') {
+  setComposeEnabled(false)
+  setComposeStatus(message, tone)
+}
+
+function selectedWorkspace() {
+  const id = els.workspaceSelect?.value || ''
+  return workspaceChoices.find((item) => item.id === id) || null
+}
+
+function syncWorkspacePath() {
+  const chosen = selectedWorkspace()
+  if (!els.workspacePath) return
+  const leaf = chosen ? pathLeaf(chosen.path) || chosen.title || chosen.id : ''
+  // The hint is a name, not a path: show the ledger title only when it says
+  // something the leaf does not (a renamed workspace). The full path stays in
+  // the title attribute, where a desktop hover can reveal it without putting a
+  // Windows path on a phone screen.
+  const label = chosen && chosen.title.length > 0 && chosen.title !== leaf ? chosen.title : ''
+  els.workspacePath.hidden = label.length === 0
+  text(els.workspacePath, label)
+  if (chosen) els.workspacePath.title = chosen.path
+  else els.workspacePath.removeAttribute('title')
+}
+
+function updatePromptCount() {
+  const value = els.promptInput?.value || ''
+  text(els.promptCount, `${value.length} / ${PROMPT_MAX}`)
+}
+
+function applyWorkspaces(payload) {
+  const list = Array.isArray(payload?.workspaces) ? payload.workspaces : []
+  const control = payload?.control && typeof payload.control === 'object' ? payload.control : {}
+  const previous = els.workspaceSelect?.value || ''
+
+  workspaceChoices = list
+    .filter((item) => item && item.id)
+    .map((item) => ({
+      id: String(item.id),
+      title: String(item.title || item.id),
+      path: String(item.path || ''),
+      exists: item.exists !== false,
+    }))
+
+  if (!els.workspaceSelect) return
+  els.workspaceSelect.replaceChildren()
+
+  if (workspaceChoices.length === 0) {
+    const empty = document.createElement('option')
+    empty.value = ''
+    empty.textContent = 'ワークスペースがありません'
+    els.workspaceSelect.append(empty)
+    disableCompose('ワークスペースが見つかりません。PC 側で一度セッションを開いてください。')
+    syncWorkspacePath()
+    return
+  }
+
+  // Two workspaces can share a leaf name; number the repeats so the list stays
+  // unambiguous without bringing paths back onto the phone.
+  const leaves = workspaceChoices.map((item) => pathLeaf(item.path) || item.title)
+  const totals = new Map()
+  for (const leaf of leaves) totals.set(leaf, (totals.get(leaf) ?? 0) + 1)
+  const seen = new Map()
+
+  workspaceChoices.forEach((item, index) => {
+    const leaf = leaves[index]
+    const ordinal = (seen.get(leaf) ?? 0) + 1
+    seen.set(leaf, ordinal)
+    const label = totals.get(leaf) > 1 && ordinal > 1 ? `${leaf}（${ordinal}）` : leaf
+    const suffix = item.exists ? '' : '（見つかりません）'
+    const option = document.createElement('option')
+    option.value = item.id
+    option.textContent = `${label}${suffix}`
+    // The full path is one hover away on the PC, never on the phone screen.
+    option.title = item.path
+    els.workspaceSelect.append(option)
+  })
+
+  const keep = workspaceChoices.some((item) => item.id === previous) ? previous : workspaceChoices[0].id
+  els.workspaceSelect.value = keep
+
+  if (control.enabled === false) {
+    const detail = typeof control.error === 'string' && control.error.length > 0 ? `（${control.error}）` : ''
+    disableCompose(`PC 側でセッション開始が使えません${detail}。`)
+  } else {
+    setComposeEnabled(true)
+    setComposeStatus('', 'info')
+  }
+  syncWorkspacePath()
+}
+
+async function loadWorkspaces({ quiet = false } = {}) {
+  if (!quiet) {
+    setComposeEnabled(false)
+    setComposeStatus('ワークスペースを読み込んでいます…', 'info')
+  }
+  try {
+    const response = await fetch(`/api/workspaces${search()}`, { cache: 'no-store' })
+    if (response.status === 401) {
+      disableCompose('アクセストークンが必要です。この画面の URL の ?k= を確認してください。')
+      return false
+    }
+    if (!response.ok) {
+      disableCompose(`ワークスペースを取得できませんでした（HTTP ${response.status}）。再読み込みしてください。`)
+      return false
+    }
+    applyWorkspaces(await response.json())
+    return true
+  } catch {
+    disableCompose('ワークスペースを取得できません。PC 側の接続を確認してください。')
+    return false
+  }
+}
+
+const FAILURE_TEXT = {
+  prompt_required: 'プロンプトを入力してください。',
+  prompt_too_long: `プロンプトが長すぎます（${PROMPT_MAX} 文字まで）。`,
+  workspace_required: 'ワークスペースを選んでください。',
+  workspace_not_found: 'そのワークスペースが見つかりません。一覧を読み込み直してください。',
+  control_disabled: 'PC 側でセッション開始が無効になっています。',
+  payload_too_large: '送信内容が大きすぎます。プロンプトを短くしてください。',
+  unsupported_media_type: '送信形式が受け付けられませんでした。ページを再読み込みしてください。',
+  session_create_failed: 'セッションを作成できませんでした。PC 側のログを確認してください。',
+  session_control_unavailable: 'PC 側でセッション制御が使えません。PC で DSH が起動しているか確認してください。',
+}
+
+function describeFailure(status, payload) {
+  // The Host documents `{ ok: false, error: <code>, message }`, so the machine
+  // code arrives in `error`; a top-level `code` is accepted as well.
+  const reported = typeof payload?.code === 'string' ? payload.code : typeof payload?.error === 'string' ? payload.error : ''
+  const code = typeof FAILURE_TEXT[reported] === 'string' ? reported : ''
+  if (status === 401) return 'アクセストークンが必要です。この画面の URL の ?k= を確認してください。'
+  if (status === 403) return FAILURE_TEXT.control_disabled
+  if (status === 413) return FAILURE_TEXT.payload_too_large
+  if (status === 415) return FAILURE_TEXT.unsupported_media_type
+  if (status === 502) return FAILURE_TEXT.session_create_failed
+  if (status === 503) return FAILURE_TEXT.session_control_unavailable
+  if (code.length > 0 && typeof FAILURE_TEXT[code] === 'string') return FAILURE_TEXT[code]
+  const detail = typeof payload?.message === 'string' ? payload.message : typeof payload?.error === 'string' ? payload.error : ''
+  return detail.length > 0 ? `開始できませんでした: ${detail}` : `開始できませんでした（HTTP ${status}）。`
+}
+
+function scrollToProgress() {
+  const target = els.progressCard
+  if (!target || typeof target.scrollIntoView !== 'function') return
+  target.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+}
+
+/**
+ * The outbound prompt for one request: the typed text, plus the fan-out
+ * directive when the toggle is on. Kept pure so the exact bytes the Host will
+ * receive can be checked without submitting a session.
+ */
+function buildPrompt(text, fanout) {
+  return fanout ? `${text}\n\n${FANOUT_DIRECTIVE}` : text
+}
+
+async function startSession() {
+  if (composeBusy || !composeReady) return
+  const workspaceId = els.workspaceSelect?.value || ''
+  const prompt = els.promptInput?.value.trim() || ''
+  const fanout = els.fanoutToggle?.checked === true
+  if (workspaceId.length === 0) {
+    setComposeStatus('ワークスペースを選んでください。')
+    return
+  }
+  if (prompt.length === 0) {
+    setComposeStatus('プロンプトを入力してください。')
+    els.promptInput?.focus()
+    return
+  }
+
+  // The toggle adds prompt text, not Host state, so the Host validates the
+  // whole body against control.maxPromptChars: keep the directive inside the
+  // budget instead of letting the request fail with prompt_too_long.
+  const outbound = buildPrompt(prompt, fanout)
+  if (outbound.length > PROMPT_MAX) {
+    setComposeStatus(`fan-out 指示を含めると上限を超えます（${PROMPT_MAX} 文字）。プロンプトを短くしてください。`)
+    return
+  }
+
+  composeBusy = true
+  els.startBtn.disabled = true
+  els.promptInput.disabled = true
+  text(els.startBtn, '開始しています…')
+  setComposeStatus('セッションを開始しています…', 'info')
+
+  try {
+    const response = await fetch(`/api/session${search()}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workspaceId, prompt: outbound }),
+    })
+    const payload = await response.json().catch(() => null)
+    if (response.status === 201 && payload?.ok) {
+      sessionStartAt = Date.now()
+      els.promptInput.value = ''
+      updatePromptCount()
+      // One-shot, like the desktop checkbox: the next prompt is a new intent.
+      if (fanout && els.fanoutToggle) els.fanoutToggle.checked = false
+      setComposeStatus(
+        fanout ? 'fan-out 指示付きでセッションを開始しました。進捗を表示します。' : 'セッションを開始しました。進捗を表示します。',
+        'ok',
+      )
+      toast(fanout ? 'fan-out 指示付きで開始しました' : 'セッションを開始しました')
+      scrollToProgress()
+      return
+    }
+    setComposeStatus(describeFailure(response.status, payload))
+  } catch {
+    setComposeStatus('送信できませんでした。通信状態を確認して、もう一度お試しください。')
+  } finally {
+    composeBusy = false
+    if (els.promptInput) els.promptInput.disabled = false
+    text(els.startBtn, '送信して開始')
+    els.startBtn.disabled = !composeReady
+  }
+}
+
+function setupCompose() {
+  els.startBtn?.addEventListener('click', () => void startSession())
+  els.workspaceSelect?.addEventListener('change', () => {
+    syncWorkspacePath()
+    setComposeStatus('', 'info')
+  })
+  els.fanoutToggle?.addEventListener('change', () => {
+    // Toggling only changes the next request; clear a stale error/success line.
+    setComposeStatus('', 'info')
+  })
+  els.promptInput?.addEventListener('input', updatePromptCount)
+  els.promptInput?.addEventListener('keydown', (event) => {
+    // Cmd/Ctrl+Enter submits, like the desktop composer; a bare Enter still
+    // inserts a newline so a multi-line prompt stays easy to write.
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault()
+      void startSession()
+    }
+  })
+  updatePromptCount()
+}
+
+// -- final result ------------------------------------------------------------
+
+/** Render the folded final assistant text. Always textContent: never innerHTML. */
+function renderResult(session) {
+  if (!els.resultCard) return
+  const result = session?.result && typeof session.result === 'object' ? session.result : null
+  const body = result && typeof result.text === 'string' ? result.text : ''
+  const visible = body.trim().length > 0
+
+  els.resultCard.hidden = !visible
+  if (!visible) {
+    if (els.resultText.textContent !== '') text(els.resultText, '')
+    if (els.resultMeta.textContent !== '') text(els.resultMeta, '')
+    return
+  }
+
+  text(els.resultText, body)
+  const live = Boolean(session.agentRunning) || session.status === 'working'
+  els.resultBadge.dataset.state = live ? 'live' : 'ready'
+  text(els.resultBadge, live ? '受信中' : '完成')
+
+  const reported = Number(result.chars)
+  const chars = Number.isFinite(reported) && reported > 0 ? reported : body.length
+  const meta = [`${chars.toLocaleString('ja-JP')} 文字`]
+  const turn = Number(result.turn)
+  if (Number.isFinite(turn) && turn > 0) meta.push(`ターン ${turn}`)
+  if (result.truncated === true) meta.push('長いため末尾を省略しています')
+  text(els.resultMeta, meta.join(' · '))
 }
 
 // -- install / PWA ----------------------------------------------------------
@@ -478,8 +837,10 @@ function setupShare() {
 function init() {
   setupInstallHint()
   setupShare()
+  setupCompose()
   if (location.hash === '#logsCard') els.logsCard.open = true
   void registerServiceWorker()
+  void loadWorkspaces()
 
   const snapshot = loadSnapshot()
   if (snapshot) {

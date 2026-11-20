@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Emulator lab">
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="#0f766e"/>
+  <rect x="5" y="4" width="11" height="24" rx="2.6" fill="none" stroke="#ccfbf1" stroke-width="1.6"/>
+  <rect x="6.6" y="7.4" width="7.8" height="12.4" rx="1" fill="#ffffff" opacity="0.18"/>
+  <circle cx="10.5" cy="25" r="0.85" fill="#ccfbf1"/>
+  <path d="M18 22a5.5 5.5 0 0 1 11 0" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M23.5 22l2.9-3.6" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="23.5" cy="22" r="1.1" fill="#fbbf24"/>
+</svg>

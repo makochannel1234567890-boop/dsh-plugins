@@ -12,7 +12,9 @@
  */
 import process from 'node:process'
 
-const files = ['plan.test.mjs', 'prompts.test.mjs', 'bridge.test.mjs']
+// The client tests stub `window` and `fetch`, so they run last and cannot leak
+// those globals into the Host-side suites.
+const files = ['arm.test.mjs', 'plan.test.mjs', 'model.test.mjs', 'team.test.mjs', 'worktree.test.mjs', 'prompts.test.mjs', 'bridge.test.mjs', 'graph.test.mjs', 'queue.test.mjs', 'gates.test.mjs', 'context.test.mjs', 'kernel.test.mjs', 'prompts2.test.mjs', 'apply.test.mjs', 'ui-state.test.mjs', 'ui-panel.test.mjs']
 
 let failures = 0
 for (const file of files) {

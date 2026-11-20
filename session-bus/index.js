@@ -685,11 +685,47 @@ function describeSummary(summary) {
   }
 }
 
-function controlTool(ctx, store) {
+/** 停止要求の理由。空・短すぎは受け付けない（監査のため）。 */
+function normalizeReason(raw) {
+  const value = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : ''
+  if (value.length < 8) return { error: 'REASON_TOO_SHORT' }
+  return { value: value.slice(0, 500) }
+}
+
+/** sessionIds を検証して重複を落とす。 */
+function parseSessionIds(raw) {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set()
+  const out = []
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const id = item.trim()
+    if (id.length === 0 || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+    if (out.length >= 32) break
+  }
+  return out
+}
+
+/** 一覧の 1 件が、指定 id（短縮形を含む）に一致するか。 */
+function matchesSession(item, ids) {
+  return ids.some((id) => id === item.sessionId || id === shortSid(item.sessionId))
+}
+
+/**
+ * 拒否は例外にせず、次に何をすればよいかを含めて返す。
+ * 例外だとモデルに「やり直し方」が伝わらないため。
+ */
+function refuse(code, note, extra = {}) {
+  return { ok: false, refused: true, code, note, ...extra }
+}
+
+export function controlTool(ctx, store) {
   return {
     name: 'session_bus_control',
     description:
-      'Coordinate the other parallel sessions in this Harness profile. action="list" shows which other sessions are live and running; action="stop_all" cancels the active turn of every other visible session that is currently running (this interrupts their in-flight step) and records them; action="resume_all" sends a resume prompt to exactly the sessions recorded by the last stop_all, all at once. Only user sessions are affected; subagent sessions are skipped. Ask the user before stop_all when their work may be in-flight.',
+      'Coordinate the other parallel sessions in this Harness profile. action="list" shows which other sessions are live and running (read-only, always safe). action="stop" cancels the active turn of ONLY the sessions named in sessionIds, and requires a reason; preview it first with dryRun:true. action="stop_all" cancels every other running session: it is refused unless you pass confirm="STOP_ALL_SESSIONS" and a reason, because it interrupts work you may not own. action="resume_all" sends a resume prompt to the sessions recorded by a previous stop (optionally limited to sessionIds). Only user sessions are affected; subagent sessions are skipped. Least privilege: prefer action="stop" with the exact sessions you mean; never use stop_all to tidy up.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -697,8 +733,28 @@ function controlTool(ctx, store) {
       properties: {
         action: {
           type: 'string',
-          enum: ['list', 'stop_all', 'resume_all'],
+          enum: ['list', 'stop', 'stop_all', 'resume_all'],
           description: 'Which coordination operation to perform.',
+        },
+        sessionIds: {
+          type: 'array',
+          items: { type: 'string' },
+          maxItems: 32,
+          description:
+            'Target sessions for action="stop" (required) or a filter for action="resume_all". Accepts the short id ("0de48dea-af7") or the full session id.',
+        },
+        reason: {
+          type: 'string',
+          maxLength: 500,
+          description: 'Why this session is being stopped. Required for stop / stop_all and recorded in the audit state.',
+        },
+        confirm: {
+          type: 'string',
+          description: 'Must be the literal "STOP_ALL_SESSIONS" for action="stop_all". Passed only after the user approved stopping every session.',
+        },
+        dryRun: {
+          type: 'boolean',
+          description: 'With stop / stop_all: report what would be stopped and cancel nothing.',
         },
       },
     },
@@ -709,8 +765,8 @@ function controlTool(ctx, store) {
     timeoutMs: 90000,
     async execute(args, exec) {
       const action = args?.action
-      if (action !== 'list' && action !== 'stop_all' && action !== 'resume_all') {
-        throw new Error('session_bus_control requires action=list|stop_all|resume_all')
+      if (action !== 'list' && action !== 'stop' && action !== 'stop_all' && action !== 'resume_all') {
+        throw new Error('session_bus_control requires action=list|stop|stop_all|resume_all')
       }
       const selfSid = exec?.agent?.id
       if (typeof selfSid !== 'string' || selfSid.length === 0) {
@@ -742,9 +798,45 @@ function controlTool(ctx, store) {
         throw new Error('session_bus_control is disabled by config (allowControl: false)')
       }
 
-      if (action === 'stop_all') {
+      if (action === 'stop') {
+        // 最小権限: 対象を明示した停止だけを先に用意する。
+        const wanted = parseSessionIds(args?.sessionIds)
+        if (wanted.length === 0) {
+          return refuse(
+            'SESSION_STOP_NO_TARGETS',
+            'action="stop" requires an explicit sessionIds array. Call action="list" first, then name only the sessions you mean.',
+            { action },
+          )
+        }
+        const reason = normalizeReason(args?.reason)
+        if (reason.error !== undefined) {
+          return refuse(
+            'SESSION_STOP_NO_REASON',
+            'action="stop" requires a reason of 8+ characters so the record says why these sessions were interrupted.',
+            { action },
+          )
+        }
         const sessions = await listOtherSessions(sessionController, selfSid)
-        const running = sessions.filter((item) => item.running === true)
+        const matched = sessions.filter((item) => matchesSession(item, wanted))
+        const unknown = wanted.filter((id) => !matched.some((item) => matchesSession(item, [id])))
+        if (matched.length === 0) {
+          return refuse(
+            'SESSION_STOP_NOT_FOUND',
+            'None of the given sessionIds is visible to this session. Re-run action="list" and copy the ids from there.',
+            { action, unknown },
+          )
+        }
+        const running = matched.filter((item) => item.running === true)
+        if (args?.dryRun === true) {
+          return {
+            ok: true,
+            action,
+            dryRun: true,
+            wouldStop: running.map(describeSummary),
+            notRunning: matched.filter((item) => item.running !== true).map(describeSummary),
+            unknown,
+          }
+        }
         const stopped = []
         const failed = []
         for (const item of running) {
@@ -757,28 +849,90 @@ function controlTool(ctx, store) {
         }
         const previous = await store.loadControl()
         const merged = [...new Set([...previous.sessionIds, ...stopped])]
-        await store.saveControl({ stoppedAt: Date.now(), sessionIds: merged })
+        await store.saveControl({ stoppedAt: Date.now(), sessionIds: merged, lastReason: reason.value })
+        return {
+          ok: failed.length === 0,
+          action,
+          stopped: stopped.map(shortSid),
+          failed,
+          notRunning: matched.filter((item) => item.running !== true).map(describeSummary),
+          unknown,
+          reason: reason.value,
+          note: 'Only the named sessions were cancelled. Their pending inbox is preserved; resume_all restarts them.',
+        }
+      }
+
+      if (action === 'stop_all') {
+        // 全停止は既定で拒否。意図が明確なときだけ 1 回通す。
+        if (args?.confirm !== 'STOP_ALL_SESSIONS') {
+          return refuse(
+            'STOP_ALL_NOT_CONFIRMED',
+            'Global stop is refused by default. Prefer action="stop" with the exact sessionIds. If you really mean "every session", ask the user first, then re-run with confirm="STOP_ALL_SESSIONS" and a reason.',
+            { action },
+          )
+        }
+        const reason = normalizeReason(args?.reason)
+        if (reason.error !== undefined) {
+          return refuse(
+            'STOP_ALL_NO_REASON',
+            'action="stop_all" requires a reason of 8+ characters.',
+            { action },
+          )
+        }
+        const sessions = await listOtherSessions(sessionController, selfSid)
+        const running = sessions.filter((item) => item.running === true)
+        if (args?.dryRun === true) {
+          return {
+            ok: true,
+            action,
+            dryRun: true,
+            wouldStop: running.map(describeSummary),
+            reason: reason.value,
+          }
+        }
+        const stopped = []
+        const failed = []
+        for (const item of running) {
+          try {
+            sessionController.cancel({ sessionId: item.sessionId })
+            stopped.push(item.sessionId)
+          } catch (error) {
+            failed.push({ session: shortSid(item.sessionId), error: String(error?.message ?? error) })
+          }
+        }
+        const previous = await store.loadControl()
+        const merged = [...new Set([...previous.sessionIds, ...stopped])]
+        await store.saveControl({ stoppedAt: Date.now(), sessionIds: merged, lastReason: reason.value })
         return {
           ok: failed.length === 0,
           action,
           stopped: stopped.map(shortSid),
           failed,
           alreadyStopped: previous.sessionIds.map(shortSid),
+          reason: reason.value,
           note: 'Active turns were cancelled. Their pending inbox is preserved; resume_all restarts them.',
         }
       }
 
       const record = await store.loadControl()
-      if (record.sessionIds.length === 0) {
+      const filterIds = parseSessionIds(args?.sessionIds)
+      const targets =
+        filterIds.length > 0
+          ? record.sessionIds.filter((id) => filterIds.includes(id) || filterIds.includes(shortSid(id)))
+          : record.sessionIds
+      if (targets.length === 0) {
         return {
           ok: true,
           action,
           resumed: [],
-          note: 'No session was recorded by a previous stop_all.',
+          note:
+            filterIds.length > 0
+              ? 'None of the given sessionIds is recorded by a previous stop. Call action="list" to see what is stopped.'
+              : 'No session was recorded by a previous stop.',
         }
       }
       const results = await Promise.allSettled(
-        record.sessionIds.map(async (sessionId, index) => {
+        targets.map(async (sessionId, index) => {
           await sessionController.prompt(
             {
               requestId: `session-bus-resume-${Date.now()}-${index}-${randomUUID()}`,
@@ -794,7 +948,7 @@ function controlTool(ctx, store) {
       const resumed = []
       const failed = []
       results.forEach((result, index) => {
-        const sessionId = record.sessionIds[index]
+        const sessionId = targets[index]
         if (result.status === 'fulfilled') resumed.push(shortSid(sessionId))
         else {
           failed.push({
@@ -803,8 +957,10 @@ function controlTool(ctx, store) {
           })
         }
       })
-      await store.saveControl({ stoppedAt: record.stoppedAt, sessionIds: [] })
-      return { ok: failed.length === 0, action, resumed, failed }
+      // 再開した分だけ記録から外す（対象を絞った再開で残りを失わないため）。
+      const remaining = record.sessionIds.filter((id) => !targets.includes(id))
+      await store.saveControl({ stoppedAt: record.stoppedAt, sessionIds: remaining, lastReason: record.lastReason })
+      return { ok: failed.length === 0, action, resumed, failed, remaining: remaining.map(shortSid) }
     },
     presentCall: (args) => ({
       card: 'generic',

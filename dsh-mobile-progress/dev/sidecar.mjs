@@ -70,6 +70,47 @@ function decompressFrames(buffer) {
 const handlers = new Map()
 const effects = []
 
+/**
+ * Fake `sessionController` for `DSH_MP_CONTROL_MOCK=1`.
+ *
+ * The real service only exists inside the Harness Host, so the phone's
+ * "start a session" flow is exercised offline: `create` returns a plausible
+ * id, and `prompt` emits the same `session/event` sequence a real session
+ * would (the request, then a final assistant message), which makes the
+ * tracking switch and the result fold observable end to end.
+ */
+function makeMockController() {
+  return {
+    async create(request) {
+      const cwd = typeof request?.cwd === 'string' ? request.cwd : ''
+      return { sessionId: `session-sidecar-${Date.now()}`, cwd }
+    },
+    async prompt(request, signal) {
+      const sessionId = String(request?.sessionId ?? '')
+      const content = Array.isArray(request?.content) ? request.content : []
+      const text = content
+        .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('\n')
+      const target = { id: sessionId, header: { cwd } }
+      setTimeout(() => {
+        if (signal?.aborted) return
+        const emit = (type, data) => handlers.get('session/event')?.(target, { type, data, time: Date.now() })
+        emit('user/message', { content: [{ type: 'text', text }] })
+        emit('assistant/message', {
+          turn: 1,
+          step: 1,
+          message: { role: 'assistant', content: [{ type: 'text', text: 'sidecar mock result' }] },
+        })
+      }, 200)
+    },
+  }
+}
+
+const mockController = makeMockController()
+const controlMock = process.env.DSH_MP_CONTROL_MOCK === '1'
+const workspacesFile = process.env.DSH_MP_WORKSPACES_FILE ?? ''
+
 const mockContext = {
   tools: {
     register(definition) {
@@ -86,6 +127,7 @@ const mockContext = {
     if (name === 'systemPrompt') return { section: () => () => undefined }
     if (name === 'workingDirectory') return { get: () => cwd }
     if (name === 'agents') return { currentInitiator: () => undefined }
+    if (name === 'sessionController') return controlMock ? mockController : undefined
     return undefined
   },
   effect(factory) {
@@ -102,7 +144,8 @@ console.log(`[sidecar] session ${sessionId}`)
 const port = Number(process.env.DSH_MP_PORT ?? 8790)
 const tunnelOn = process.env.DSH_MP_TUNNEL === '1'
 const keepAwakeOn = process.env.DSH_MP_KEEPAWAKE === '1'
-console.log(`[sidecar] port ${port} tunnel=${tunnelOn} keepAwake=${keepAwakeOn}`)
+console.log(`[sidecar] port ${port} tunnel=${tunnelOn} keepAwake=${keepAwakeOn} controlMock=${controlMock}`)
+console.log(`[sidecar] workspaces ledger ${workspacesFile.length > 0 ? workspacesFile : '(default)'}`)
 apply(mockContext, {
   enabled: true,
   port,
@@ -115,6 +158,9 @@ apply(mockContext, {
   // downloaded on first use), `DSH_MP_KEEPAWAKE=1` the sleep guard.
   tunnel: tunnelOn ? { enabled: true, provider: 'cloudflared', mode: 'quick', autoDownload: true } : false,
   keepAwake: keepAwakeOn,
+  // `DSH_MP_CONTROL_MOCK=1` backs `POST /api/session` with a fake controller;
+  // `DSH_MP_WORKSPACES_FILE` points the list at another ledger.
+  control: { enabled: true, workspacesFile },
 })
 
 const logFile = await findSessionLog()

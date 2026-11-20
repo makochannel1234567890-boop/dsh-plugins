@@ -11,10 +11,32 @@
    `systemPrompt.context` として差し込みます（自分自身のセッションは除外）。
 3. **`share_progress` ツール** — モデルが節目・方針変更・ブロッカーを明示的に共有できます。
 4. **`session_bus_digest` ツール** — いま見えているダイジェストをその場で確認できます。
-5. **`session_bus_control` ツール** — `list` / `stop_all` / `resume_all`。
+5. **`session_bus_control` ツール** — `list` / `stop` / `stop_all` / `resume_all`。
+   - `list` は読み取りだけ。止めたいセッションをここで確認する。
+   - `stop` は **`sessionIds` を明示**した分だけ止める。`reason`（8文字以上）が必須。
+     `dryRun: true` で「止めずに対象だけ返す」下見ができる。**こちらが既定の使い方**。
+   - `stop_all` は `confirm: "STOP_ALL_SESSIONS"` と `reason` が揃わない限り**拒否**する（§安全弁）。
+   - `resume_all` は停止記録のセッションへ再開プロンプトを送る。`sessionIds` で絞れる。
    停止は `sessionController.cancel`（進行中のターンを中断、保留メッセージは保持）、
-   再開は `sessionController.prompt` で停止記録済みのセッションへ再開プロンプトを一斉送信します。
-   サブエージェントのセッションは対象外です。
+   再開は `sessionController.prompt`。サブエージェントのセッションは対象外。
+
+## 安全弁（2026-11-17 のインシデントを受けて）
+
+「とりあえず全部止める」が一番危ない。対象を確認しない一斉停止で、他のセッションの
+進行中ターンを巻き込んだ事故があったため、`stop_all` は既定で拒否にした。
+
+| 操作 | 必須 | 欠けたとき |
+|---|---|---|
+| `stop` | `sessionIds`（1〜32件）と `reason`（8文字以上） | `refused: true`（何も止めない） |
+| `stop_all` | `confirm: "STOP_ALL_SESSIONS"` と `reason` | `refused: true`（何も止めない） |
+| `resume_all` | なし（`sessionIds` で絞れる） | — |
+
+- 拒否は例外ではなく `{ ok:false, refused:true, code, note }` で返す。`note` に
+  「次に何をすればよいか」を書いてある。
+- 停止記録（`control.json`）には `lastReason` を残す。誰が何のために止めたかが追える。
+- `resume_all` は再開した分だけ記録から外す。絞って再開しても残りは消えない。
+- 加えて `dsh-command-guard` を入れている場合、`stop` / `stop_all` は
+  ツール段階でも承認要求になる（二重の安全弁）。
 
 ## ストア
 
@@ -46,3 +68,4 @@
   共有ファイルを触る前には現物を確認してください。
 - セッションログには新しいイベント種別を追加しません（再生・フォーク互換のため）。
 - `stop_all` は進行中のツール実行も中断します。重要な書き込み中に呼ばないでください。
+  可能な限り `stop` + `sessionIds` で対象を限定してください。

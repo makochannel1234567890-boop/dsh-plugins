@@ -1,0 +1,47 @@
+{
+  "name": "dsh-social-desktop-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Let a DSH agent read and interact with allowlisted social web pages and observe/operate the local desktop, under an explicit scope grant, host/app allowlists, a permanent ban on write-type social actions, confirmation-gated power operations, an append-only audit log and a kill switch.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./lib/*": "./lib/*",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "scripts",
+    "test",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "SAFETY.md"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "dsh",
+    "social",
+    "desktop-automation",
+    "browser-agent",
+    "policy",
+    "allowlist",
+    "safety"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "test:core": "node --test \"test/core/*.test.mjs\""
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

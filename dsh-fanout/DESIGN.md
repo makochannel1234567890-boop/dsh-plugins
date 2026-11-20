@@ -155,14 +155,27 @@ Component props available (standard props): `sessionId`, `useSession`, `inputAct
 defensively (`props.sessionId` may be undefined).
 
 UI: a compact, collapsible bar that matches the host theme (only `--dsw-alias-*` tokens,
-no literal colors except artwork). Contents:
-- title `Fan-out` + status dot,
-- slider 1: **分岐セッション数** 1..8 (default 4),
-- slider 2: **思考拡張** 0..100 (default 40) with a short caption mapping to probe count
-  (0=オフ, 1–30=浅く1軸, 31–60=3軸, 61–85=5軸+分類ゲート, 86–100=8軸+分類ゲート),
-- objective textarea (2 rows, placeholder 例: 3つの大規模で非対称な作業を…),
-- buttons: 開始 / 停止 / 更新,
-- status line: active run state, workers settled/total, estimated tokens.
+no literal colors except artwork). Layout (rework 2026-11-17, see "Verified platform facts →
+Theme tokens"):
+- header row: connection dot, tree glyph, title `Fan-out`, then the **compact status group**
+  (state dot + state word, run id, settled/total, failed count, est. tokens; `aria-live="polite"`),
+  then the collapse toggle. The status lives here so it stays readable while collapsed.
+- body, `max-width: 860px` so controls never stretch across a wide composer:
+  - params strip (one sunken card, responsive 2-column grid): **分岐セッション数** 1..8
+    (default 4) and **思考拡張** 0..100 (default 40). Each row is label (+ meaning badge
+    `オフ / 浅く1軸 / 3軸 / 5軸 / 8軸+分類ゲート`) and value on the top line, track below;
+  - fields grid (responsive 2 columns): objective textarea and tasks textarea side by side,
+    verify input spanning the full width;
+  - actions: 開始 (brand outline, primary) / 停止 / 更新.
+- error line: bordered callout with a `state-error-primary` accent (was invisible before,
+  because `--dsw-alias-danger-primary` does not exist in this theme).
+
+### Theme tokens (verified against client inspect `Theme.listTokens`)
+Exists: `bg-base`, `bg-layer-1`, `bg-layer-2`, `border-l1`, `border-l2`, `brand-primary`,
+`label-primary/secondary/caption/tertiary`, `state-{success,error,warn,idle}-primary`.
+**Does not exist:** `bg-sunken` (inputs had no fill), `danger-primary` (errors rendered in
+`currentColor`), and any `font-size*` / `radius*` / `font-family*` alias (those fall back to
+literal px in `client.js`). Do not reintroduce the two missing tokens.
 Refresh by polling `GET /state` every 2s while mounted (clear the interval on unmount via
 `ctx.effect`); all fetches go through `fetch('http://127.0.0.1:<port>/…', { headers: { 'x-fanout-token': token } })`,
 token obtained from `GET /health` on mount. On failure, show a muted “未接続” line, never throw.
@@ -178,6 +191,42 @@ Bridge responses the panel relies on:
   objective and call `fanout_start` with tasks, so the sliders are not silently reduced to
   one worker.)
 - `POST /stop`   `{run_id?}` -> `{ ok }`
+
+`GET /state` gained per-run progress fields in 0.2.0 (`engine.uiRun()`):
+`percent`, `phase` (`workers|integrating|done|failed|stopped`), `integrator_state`,
+`created_at`, `objective`, `final_path`, `integrate`, `error`, and
+`worker_details:[{index, state, weight, session_id, summary, tasks:[{id,title,weight}]}]`.
+The numeric `workers` key stays reserved for the slider count, which is why the
+per-worker array is `worker_details` and not `workers`.
+
+### Sidebar progress board (0.2.0)
+
+Two registrations with one identity — the shell matches a `sidebar.panellist` row to the
+`main` panel by the same id, so both use `fanout`:
+
+- `sidebar.panellist`, `{ id:'fanout', order:30, label: () => activeStrings.panelNavLabel }`
+  renders `FanoutIcon`; owner props are `{ size, active }` (`SidebarPanelIconOwnerProps`).
+  The icon is an inline SVG fan-out glyph: stroke `brand-primary` while selected,
+  `label-secondary` otherwise. No artwork file, no imports.
+- `main`, `{ key:'fanout' }` renders `FanoutPanel` — a page, not a dialog.
+
+Each registration sits in its own `try`/`catch`: a host without `sidebar.panellist` must not
+lose the `main` panel, and a host without `main` must not lose the row or the composer dock.
+
+Progress numbers have exactly one owner: `lib/plan.js` `progressOf`/`phaseOf`, consumed by
+`engine.uiRun()`. The client only renders them, with one documented exception: an old Host
+that predates these fields. Then `client.js` derives the identical numbers from
+`total`/`settled`/`status` (`progressOfRun`/`phaseOfRun`/`integratorStateOf`), and simply
+omits what it cannot know (no worker chips, no elapsed clock — `updated_at` is not a start
+time). Fields present from the Host always win.
+
+Board layout: header (title, connection dot, 更新), one summary strip (running count,
+settled/total workers, integrating count), then a section per live run and one for recent
+runs. Each run card: shortened id, status pill, percent, elapsed, objective (1 line),
+`role="progressbar"` bar with `aria-valuenow`, worker count row, stage strip
+(`分岐実行 › 統合 › 完了`), one chip per worker (`W1 実行中 3件`, task titles in the `title`
+attribute), then the integrator line and `final.md` path. The board polls `GET /state` on
+its own 2s interval — the dock stops polling when collapsed, and the board must not freeze.
 
 ## Acceptance (whole plugin)
 
@@ -199,6 +248,7 @@ Bridge responses the panel relies on:
 |---|---|
 | `node --check` on index.js, lib/*.js, client.js | pass |
 | `node test/run-all.mjs` (54 checks) | pass |
+| Panel rework (2026-11-17): real `renderDock` rendered headlessly at 1000px and 380px for 6 states (running / idle / collapsed / failed / offline / narrow); before vs after measured in the browser | pass. Root 1000×360 → 860×281, slider track 834 → 399 (two per row), fields gained a real fill (`rgba(0,0,0,0)` → `bg-base`), no horizontal overflow at 380px. Colours were supplied by representative dark-theme values in the harness, so this verifies geometry, hierarchy and state coverage — **not** the live theme's rendered pixels. |
 | Engine state machine with fake `sessionController` (packing, settle, auto-integration, divergence gate, stop) | pass |
 | Real `apply()` against a fake Cordis context: 4 tools, prompt section, global listeners, `/fanout-api` mount, loopback `/health`, tool→engine→auto-integration→completion, divergence probe, disposer closes the bridge | pass |
 | Bundle package validation + install (pnpm, dependency saved) | pass |

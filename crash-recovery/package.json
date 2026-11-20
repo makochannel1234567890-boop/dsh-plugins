@@ -1,0 +1,43 @@
+{
+    "name":  "dsh-crash-recovery",
+    "version":  "0.1.2",
+    "description":  "Automatic recovery after an unexpected DeepSeek Harness exit: a liveness journal records what was running, exactly one supervisor session reconciles the affected fanout runs, and every stopped session is resumed with a role-aware prompt rebuilt from the run graph.",
+    "type":  "module",
+    "main":  "index.js",
+    "exports":  {
+                    ".":  "./index.js",
+                    "./locale/*.json":  "./locale/*.json",
+                    "./icon":  "./icon.svg",
+                    "./package.json":  "./package.json",
+                    "./watchdog":  "./bin/watchdog.mjs"
+                },
+    "files":  [
+                  "index.js",
+                  "lib/detect.js",
+                  "lib/journal.js",
+                  "lib/prompts.js",
+                  "lib/resume-plan.js",
+                  "bin/watchdog.mjs",
+                  "cordis.patch.yml",
+                  "locale/en.json",
+                  "locale/ja.json",
+                  "icon.svg",
+                  "README.md"
+              ],
+    "keywords":  [
+                     "deepseek",
+                     "deepseek-harness",
+                     "dsh",
+                     "dsh-plugin",
+                     "crash-recovery",
+                     "fanout",
+                     "sessions",
+                     "resilience"
+                 ],
+    "license":  "MIT",
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           }
+            }
+}

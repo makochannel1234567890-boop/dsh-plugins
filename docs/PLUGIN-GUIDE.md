@@ -233,6 +233,13 @@ plugin_manager install_bundle  target: <絶対パス>
   `node_modules` に入る。実行時 import はその解決に従う。
 - **`ctx.on` のスコープ** … `{ global: true }` を付けないと、その Agent 文脈の
   イベントしか届かない場合がある。
+- **setup 中の `ctx.get(...)` は空を返しうる** … 数百エントリの構成では、Web
+  サーバーはプラグインと並列に立ち上がる。`apply()` の同期コードで
+  `ctx.get('webServer')` を一度だけ読むと、その瞬間は `undefined` で、
+  `register` を呼ばないまま静かに諦める（実測: サイドバーパネルだけ
+  「トンネル未接続」になり、スマホ側とトンネルは正常のまま）。
+  `ctx.inject(['webServer'], (scope) => { ... })` で後追いし、載ったかどうかを
+  状態（例: `server.bridge.mounted`）にも出すと、次は 1 回の確認で済む。
 - **ツール出力スキーマ** … `type: ['number','null']` のような union は避け、
   単純な型 + センチネル値（-1 など）にすると安全。
 - **静的ファイルのキャッシュ** … 開発中は `cache-control: no-store`。

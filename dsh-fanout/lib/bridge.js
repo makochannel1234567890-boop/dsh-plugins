@@ -70,7 +70,7 @@ function routePath(rawUrl) {
  *
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createBridgeHandler({ engine, store, config, log, token }) {
+export function createBridgeHandler({ engine, store, config, log, token, team, worktree }) {
   return function handle(req, res) {
     const origin = req.headers.origin
     const method = req.method ?? 'GET'
@@ -105,7 +105,22 @@ export function createBridgeHandler({ engine, store, config, log, token }) {
           const saved = (await store.loadConfig().catch(() => undefined)) ?? {}
           const workers = saved.workers ?? config.defaultWorkers
           const expansion = saved.expansion ?? config.defaultExpansion
-          send(res, 200, { ok: true, config: { workers, expansion }, ...engine.uiState() }, origin)
+          // The composer checkbox is per session; a request without one just
+          // reports the disarmable default so the panel can render "off".
+          const sessionId = new URL(req.url ?? '/', 'http://127.0.0.1').searchParams.get('session_id') ?? ''
+          send(res, 200, { ok: true, config: { workers, expansion }, armed: engine.armedState(sessionId), ...engine.uiState() }, origin)
+          return
+        }
+        if (route === 'POST /arm') {
+          const body = await readBody(req)
+          const result = engine.arm({
+            sessionId: typeof body.session_id === 'string' ? body.session_id : '',
+            armed: body.armed === true,
+            mode: body.mode,
+            workers: body.workers,
+            expansion: body.expansion,
+          })
+          send(res, result.ok === false ? 400 : 200, result, origin)
           return
         }
         if (route === 'POST /config') {
@@ -125,6 +140,55 @@ export function createBridgeHandler({ engine, store, config, log, token }) {
           engine.config.defaultWorkers = workers
           engine.config.defaultExpansion = expansion
           send(res, 200, { ok: true, config: { workers, expansion } }, origin)
+          return
+        }
+        // Team mode and the shared task board: the panel is their only UI, so
+        // these two routes carry the whole surface. A missing service answers
+        // 409 rather than inventing an "off" state the panel could show.
+        if (route === 'GET /team') {
+          if (team === undefined) {
+            send(res, 409, { ok: false, error: 'team-unavailable' }, origin)
+            return
+          }
+          const sessionId = new URL(req.url ?? '/', 'http://127.0.0.1').searchParams.get('session_id') ?? ''
+          const view = team.read(sessionId)
+          send(res, view.ok === false ? 409 : 200, view, origin)
+          return
+        }
+        if (route === 'POST /team') {
+          if (team === undefined) {
+            send(res, 409, { ok: false, error: 'team-unavailable' }, origin)
+            return
+          }
+          const body = await readBody(req)
+          const result = await team.setEnabled(
+            typeof body.session_id === 'string' ? body.session_id : '',
+            body.enabled === true,
+          )
+          send(res, result.ok === false ? 409 : 200, result, origin)
+          return
+        }
+        // One checkout control: the panel asks whether creation is possible at
+        // all, then creates one branch and enters it in a single operation.
+        if (route === 'GET /worktree') {
+          if (worktree === undefined) {
+            send(res, 409, { ok: false, error: 'worktree-unavailable' }, origin)
+            return
+          }
+          send(res, 200, worktree.status(), origin)
+          return
+        }
+        if (route === 'POST /worktree') {
+          if (worktree === undefined) {
+            send(res, 409, { ok: false, error: 'worktree-unavailable' }, origin)
+            return
+          }
+          const body = await readBody(req)
+          const result = await worktree.create(
+            typeof body.session_id === 'string' ? body.session_id : '',
+            typeof body.from === 'string' ? body.from : '',
+          )
+          send(res, result.ok === false ? 400 : 200, result, origin)
           return
         }
         if (route === 'POST /start') {
@@ -195,10 +259,10 @@ export function createBridgeHandler({ engine, store, config, log, token }) {
  * Start the loopback carrier. Returns `{ port, token, handler, stop() }`; the
  * same `handler` can be mounted on the Web server under `FRONT_PREFIX`.
  */
-export async function startBridge({ engine, store, config, log }) {
+export async function startBridge({ engine, store, config, log, team, worktree }) {
   const token = randomUUID()
   const port = config.bridgePort
-  const handler = createBridgeHandler({ engine, store, config, log, token })
+  const handler = createBridgeHandler({ engine, store, config, log, token, team, worktree })
   const server = http.createServer(handler)
 
   await new Promise((resolve, reject) => {

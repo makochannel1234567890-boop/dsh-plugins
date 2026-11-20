@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict'
 import http from 'node:http'
 
-import { FRONT_PREFIX, startBridge } from '../lib/bridge.js'
+import { createBridgeHandler, FRONT_PREFIX, startBridge } from '../lib/bridge.js'
 
 const TEST_PORT = Number(process.env.FANOUT_TEST_PORT ?? 51999)
 const ORIGIN = 'http://127.0.0.1:58507'
@@ -114,6 +114,10 @@ const engine = {
   state: { uiCalls: 0, starts: [], stops: [] },
   // Same object identity as the bridge config, exactly like index.js does.
   config: undefined,
+  // The composer checkbox state is per session; without one it is simply off.
+  armedState(sessionId) {
+    return { session_id: typeof sessionId === 'string' ? sessionId : '', armed: false }
+  },
   uiState() {
     engine.state.uiCalls += 1
     return {
@@ -161,11 +165,46 @@ const watchdog = setTimeout(() => {
 }, 30000)
 watchdog.unref()
 
+// The two faces the panel owns: the bridge only forwards to them, so these
+// record what crossed the wire instead of standing up the real services.
+const teamFace = {
+  state: { reads: [], writes: [] },
+  read(sessionId) {
+    teamFace.state.reads.push(sessionId)
+    return {
+      ok: true,
+      enabled: true,
+      tasks: [{ id: 't1', subject: 'Scaffold', status: 'in_progress', owner: 'lead', ownerId: 's1', ready: true, blocked: 0 }],
+    }
+  },
+  async setEnabled(sessionId, enabled) {
+    teamFace.state.writes.push({ sessionId, enabled })
+    return { ok: true, enabled }
+  },
+}
+
+const worktreeFace = {
+  state: { creates: [] },
+  status() {
+    return { ok: true, available: true }
+  },
+  async create(sessionId, from) {
+    worktreeFace.state.creates.push({ sessionId, from })
+    return {
+      ok: true,
+      branch: 'dsh-1a2b3c4d-9e0f',
+      path: 'C:/repo/.agents/worktrees/dsh-1a2b3c4d-9e0f',
+      baseCommit: 'abc123',
+      repositoryRoot: 'C:/repo',
+    }
+  },
+}
+
 let bridge
 
 try {
   try {
-    bridge = await startBridge({ engine, store, config, log })
+    bridge = await startBridge({ engine, store, config, log, team: teamFace, worktree: worktreeFace })
   } catch (error) {
     throw new Error(
       `startBridge failed on 127.0.0.1:${TEST_PORT} (${error?.code ?? 'error'}): ${error?.message ?? error}. ` +
@@ -360,6 +399,73 @@ try {
       'expansion 0 must be stored as 0 (0=off), not replaced by defaultExpansion',
     )
     assert.equal(persisted.config.expansion, 0, 'store.saveConfig must receive expansion 0')
+  })
+  // --- Team mode + checkout: the panel's two other surfaces ---------------
+  await check('GET /team names the session and returns the board', async () => {
+    const response = await call('GET', '/team?session_id=session-1', { token: bridge.token })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.ok, true)
+    assert.equal(response.body.enabled, true)
+    assert.equal(response.body.tasks.length, 1)
+    assert.equal(response.body.tasks[0].subject, 'Scaffold')
+    assert.deepEqual(teamFace.state.reads, ['session-1'])
+  })
+
+  await check('POST /team forwards the selection exactly', async () => {
+    const on = await call('POST', '/team', { token: bridge.token, body: { session_id: 'session-1', enabled: true } })
+    assert.equal(on.status, 200)
+    assert.equal(on.body.enabled, true)
+    const off = await call('POST', '/team', { token: bridge.token, body: { session_id: 'session-1', enabled: false } })
+    assert.equal(off.status, 200)
+    assert.equal(off.body.enabled, false)
+    assert.deepEqual(teamFace.state.writes, [
+      { sessionId: 'session-1', enabled: true },
+      { sessionId: 'session-1', enabled: false },
+    ])
+  })
+
+  await check('GET /worktree reports whether creation is possible', async () => {
+    const response = await call('GET', '/worktree', { token: bridge.token })
+    assert.equal(response.status, 200)
+    assert.deepEqual(response.body, { ok: true, available: true })
+  })
+
+  await check('POST /worktree creates from the requested base ref', async () => {
+    const response = await call('POST', '/worktree', {
+      token: bridge.token,
+      body: { session_id: 'session-1', from: 'main' },
+    })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.ok, true)
+    assert.equal(response.body.branch, 'dsh-1a2b3c4d-9e0f')
+    assert.deepEqual(worktreeFace.state.creates, [{ sessionId: 'session-1', from: 'main' }])
+  })
+
+  await check('both surfaces answer 409 when the Host mounts no face', async () => {
+    const bare = createBridgeHandler({ engine, store, config, log, token: 'bare-token' })
+    const ask = (method, path) =>
+      new Promise((resolve) => {
+        const result = {}
+        const response = {
+          writeHead(status) {
+            result.status = status
+          },
+          end() {
+            resolve(result)
+          },
+        }
+        const request = {
+          method,
+          url: path,
+          headers: { 'x-fanout-token': 'bare-token' },
+          async *[Symbol.asyncIterator]() {
+            return
+          },
+        }
+        bare(request, response)
+      })
+    assert.equal((await ask('GET', '/team')).status, 409)
+    assert.equal((await ask('GET', '/worktree')).status, 409)
   })
 } finally {
   if (bridge !== undefined) {

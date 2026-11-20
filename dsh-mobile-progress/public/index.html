@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="DeepSeek Harness エージェントの進捗をスマホで見るライブ画面">
+  <meta name="description" content="DeepSeek Harness エージェントの進捗と結果をスマホで見るライブ画面">
   <title>DSH Progress</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -35,7 +35,40 @@
       </span>
     </header>
 
-    <section class="card hero" aria-live="polite">
+    <section class="card compose" id="composeCard" aria-labelledby="composeTitle">
+      <div class="card-head">
+        <h2 id="composeTitle">新しいセッション</h2>
+        <span class="count" id="composeMode">スマホから</span>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="workspaceSelect">ワークスペース</label>
+        <select id="workspaceSelect" name="workspace" disabled>
+          <option value="">読み込み中…</option>
+        </select>
+        <p class="field-hint" id="workspacePath" hidden></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="promptInput">プロンプト</label>
+        <textarea id="promptInput" name="prompt" rows="3" maxlength="8000" autocomplete="off"
+          enterkeyhint="send" placeholder="このワークスペースで何を頼む？"></textarea>
+        <p class="field-hint" id="promptCount">0 / 8000</p>
+      </div>
+
+      <label class="fanout-toggle" for="fanoutToggle">
+        <input type="checkbox" id="fanoutToggle" name="fanout" autocomplete="off" disabled>
+        <span class="fanout-copy">
+          <strong>fan-out（並列分解）</strong>
+          <small>独立した作業が3つ以上ある依頼向け。送信プロンプトに fan-out 指示を追加します。</small>
+        </span>
+      </label>
+
+      <button class="btn" id="startBtn" type="button" disabled>送信して開始</button>
+      <p class="compose-status" id="composeStatus" role="status" hidden></p>
+    </section>
+
+    <section class="card hero" id="progressCard" aria-live="polite">
       <div class="hero-head">
         <span class="chip" id="statusChip" data-status="idle">待機中</span>
         <span class="session" id="sessionLabel">セッション未接続</span>
@@ -67,6 +100,15 @@
       </div>
       <ol class="steps" id="steps"></ol>
       <p class="empty" id="stepsEmpty">まだステップはありません。作業が始まると自動で表示されます。</p>
+    </section>
+
+    <section class="card result" id="resultCard" hidden aria-labelledby="resultTitle">
+      <div class="card-head">
+        <h2 id="resultTitle">結果</h2>
+        <span class="badge" id="resultBadge" data-state="ready">完成</span>
+      </div>
+      <div class="result-text" id="resultText"></div>
+      <p class="result-meta" id="resultMeta"></p>
     </section>
 
     <section class="card meta">

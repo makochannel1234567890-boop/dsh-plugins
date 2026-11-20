@@ -1,10 +1,16 @@
-﻿/* dsh-mobile-progress service worker (v2).
+/* dsh-mobile-progress service worker (v6).
  *
  * Makes the phone page a real PWA:
  *  - the app shell is precached, so the app opens with no network at all;
- *  - `/api/state` is network-first with the last good snapshot as fallback, so
- *    an offline phone still shows the last progress it received;
- *  - `/api/stream` (SSE) is never intercepted.
+ *  - `/api/state` and `/api/workspaces` are network-first with the last good
+ *    snapshot as fallback, so an offline phone still shows the last progress it
+ *    received and the last workspace list it loaded;
+ *  - `/api/stream` (SSE) is never intercepted;
+ *  - `POST /api/session` is never intercepted or cached: starting a session is
+ *    a one-shot write that must fail loudly, not be replayed from a cache.
+ *
+ * v6 ships the leaf-name workspace list and the fan-out toggle, so the shell
+ * cache key changes and an installed phone picks both up on its next visit.
  *
  * Service workers only run on a secure origin. The LAN URL over plain HTTP
  * installs as a bookmark-like shortcut; the public HTTPS tunnel URL (or
@@ -14,10 +20,13 @@
  * `?k=<token>` query needed to re-fetch token-protected resources.
  */
 
-const VERSION = 'v4'
+const VERSION = 'v6'
 const SHELL_CACHE = `dsh-progress-shell-${VERSION}`
 const DATA_CACHE = `dsh-progress-data-${VERSION}`
 const TOKEN = self.location.search || ''
+
+/** API reads whose last good response is worth keeping for an offline phone. */
+const CACHED_API = new Set(['/api/state', '/api/workspaces'])
 
 const SHELL = [
   '/',
@@ -176,13 +185,19 @@ async function staleWhileRevalidate(request) {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request
+  // Writes are never cached or replayed: `POST /api/session` must reach the Host
+  // (or fail visibly) every single time the user taps 送信して開始.
   if (request.method !== 'GET') return
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
   // Live streams must never be served from, or written to, a cache.
   if (url.pathname === '/api/stream') return
   if (url.pathname === '/healthz') return
-  if (url.pathname.startsWith('/api/')) {
+  if (url.pathname === '/api/session') return
+  // GET /api/state and GET /api/workspaces: network-first with the last good
+  // response as the offline fallback. cacheKey() drops ?k=, so the token never
+  // becomes part of a cache entry.
+  if (CACHED_API.has(url.pathname) || url.pathname.startsWith('/api/')) {
     event.respondWith(networkFirstJson(request))
     return
   }

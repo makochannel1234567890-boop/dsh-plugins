@@ -1,7 +1,8 @@
 # dsh-mobile-progress
 
 エージェントの進捗を、手元のスマホで「進捗バー」として見るための DeepSeek Harness プラグインです。
-**同じ Wi-Fi にいなくても**見られます。PC がスリープで落ちないようにもします（実装は下記）。
+**同じ Wi-Fi にいなくても**見られます。v0.3.0 からは、スマホから**依頼を送って新しいセッションを
+始め**、その進捗から**最終結果**までを同じ画面で追えます。PC がスリープで落ちないようにもします。
 
 ![スマホでの表示](shots/pwa-public.png)
 
@@ -15,11 +16,19 @@
 - `cloudflared` トンネルを自動で張り、**インターネット越しの HTTPS URL** を発行します。
   スマホがモバイル回線・別 Wi-Fi でも、URL を知っていれば見られます。
 - Windows のスリープを抑止するヘルパーを常駐させます（スリープした PC は応答できないため）。
+- **スマホから依頼を送って新しいセッションを開始**できます。ワークスペースを選んでプロンプトを
+  送ると、そのワークスペースを `cwd` にして DSH のセッションが始まります。
+- **進捗から最終結果までを同じ画面で**見られます。追跡中セッションの最後のアシスタント本文だけを
+  折りたたんで表示します（推論・ツール内容は出しません）。
 
 ```
 session events ──► state fold ──► SSE ──► phone
    todo_write         (plugin)              ┌ 同一 Wi-Fi:  http://<LAN IP>:8790/?k=…
    progress_update                          └ どこからでも: https://<random>.trycloudflare.com/?k=…
+   assistant/message ──► result fold ──┘
+
+phone ──► POST /api/session ──► sessionController.create() + prompt()
+                                  └─► 新しいセッションが上の feed に流れ込む
 ```
 
 ## インストール
@@ -70,6 +79,59 @@ New-NetFirewallRule -DisplayName "DSH Mobile Progress" -Direction Inbound `
 
 > 公開 URL 経由ならトンネルは**外向き接続**なので、ファイアウォールも同じ Wi-Fi も不要です。
 
+## スマホから依頼する（セッション開始）
+
+PC の前にいなくても、思いついた依頼をそのまま投げられます。
+
+1. 画面下の依頼パネルで**ワークスペース**を選ぶ（`GET /api/workspaces`）。一覧は DSH の
+   ワークスペース台帳（既定 `~/.dsh/storages/workspace.json`、`control.workspacesFile` で変更）から読みます。
+   セレクトに出す名前は**パスの最下層（フォルダ名）だけ**です。同じ名前が複数あるときは
+   `名前（2）` のように番号を足し、フルパスは `title` 属性（PC のホバー）にだけ残します。
+2. プロンプトを入力して**送信**する（`POST /api/session`）。上限は `control.maxPromptChars` 文字（既定 8000）。
+3. サーバーが `ctx.get('sessionController')` でセッションを作り、`cwd` をそのワークスペースにして
+   プロンプトを queue モードで流し込みます。
+4. 以後そのセッションが**追跡対象**になり、進捗バー・ステップがライブで動きます。
+5. ターンが終わると「最終結果」に**最後のアシスタント本文**が出ます（最大 `control.resultMaxChars` 文字。
+   超えた分は切り、`truncated: true` になります）。
+
+### fan-out を使う（スマホから）
+
+依頼パネルの **fan-out（並列分解）** をオンにして送信すると、そのプロンプトの末尾に fan-out 指示が
+追加されます。
+
+- 指示文は、独立した作業が3つ以上あり並列に進められる依頼なら `fanout_start` で分解して実行し、
+  `workers` / `expansion` を依頼に必要な値まで上げること、単一作業や直列の連鎖ならそのまま
+  1セッションで処理して判断を1行で述べることを求めます。
+- トグルは**次の1回だけ**有効です。送信に成功すると自動でオフに戻ります。
+- 指示文もプロンプトの一部なので、`control.maxPromptChars` は指示込みで判定します（超過は送信前に
+  画面が止めます）。
+- これは Host 側 composer チェックボックスの「armed」状態そのものではありません。Host プラグインを
+  再読み込みするとクイックトンネルの URL が変わってしまうため、**URL を保つ方式**として、armed の
+  予算フロアや狭いグラフの拒否までは適用しません。それらが必要なときは PC 側のチェックボックスを
+  使ってください。
+
+成功時は `201` で `session.id` / `session.short` / `session.cwd` と、選んだ `workspace` を返します。
+`GET /api/workspaces` の `control` は `{enabled, available, error}` で、「開始できる状態か」を画面に伝えます。
+
+### 失敗したときの表示
+
+| 状況 | 画面 | API |
+|---|---|---|
+| 送信先が未選択 | 「ワークスペースを選んでください」 | `400 workspace_required` |
+| プロンプトが空 | 送信できない | `400 prompt_required` |
+| プロンプトが長すぎる | 「長すぎます」と上限を表示 | `400 prompt_too_long` |
+| 台帳に無いワークスペース | 「見つかりません。再読み込み」 | `400 workspace_not_found` |
+| この Host では制御が無効 | 依頼パネルを出さない | `403 control_disabled` |
+| `sessionController` が無い | 「この Host では開始できません」 | `503 session_control_unavailable` |
+| セッションを開始できない（作成 or prompt 送信） | 「開始できませんでした。もう一度」 | `502 session_create_failed` |
+| 送信中（二重送信） | ボタンを disable。成功で入力欄をクリア | — |
+| トンネル断・オフライン | 「オフライン — 最後に受け取った状態です」 | fetch 失敗（画面は最後の状態） |
+| body が 64KB 超 / JSON でない | 送信しない | `413 payload_too_large` / `415 unsupported_media_type` |
+| body の JSON が壊れている | 送信しない | `400 invalid_json` |
+
+進捗と結果は同じ SSE（`GET /api/stream`）に乗ります。`session.result` が `null` の間は
+`session.resultState: "none"`、本文が入ると `"ready"` になります。
+
 ## 公開 URL（トンネル）
 
 既定で有効です。初回起動時に `cloudflared` を GitHub Releases から
@@ -113,14 +175,20 @@ powercfg /setactive SCHEME_CURRENT
 - **データはトークンで守ります。** `accessToken` が空でトンネルを張る場合、起動時に
   24 文字のトークンを生成し `~/.dsh/storages/mobile-progress/access-token`（0600）に保存します。
   以後の起動は同じトークンを使い回すので、URL は安定します。
-- `/api/state` と `/api/stream` は `?k=<token>` か `x-progress-token` ヘッダーが必要（無ければ 401）。
+- **`/api/` 配下はすべて** `?k=<token>` か `x-progress-token` ヘッダーが必要（無ければ 401）。
+  対象は `/api/state`・`/api/stream`・`/api/workspaces`・`/api/session` です。
 - **アプリの外枠（HTML/CSS/JS/アイコン/manifest）は認証しません。** `<script src>` や
   `<link href>` はページのクエリ文字列を引き継がないため、ここを守ると画面自体が壊れます。
-  シェルには進捗データが入っていません。
-- 画面に出すのは**依頼文・ステップ・短いログ・カウンタ**だけ。アシスタント本文、ツール引数、
-  ファイル内容は保存・配信しません（`todo_write` のステップ文字列は例外）。
-- 公開 URL は「URL を知っていれば誰でも」届きます。トークン付き URL を人に見せないでください。
-  漏れたら `access-token` ファイルを消して再起動すれば新しいトークンになります。
+  シェルには進捗データも結果本文も入っていません。
+- 画面に出すのは**依頼文・ステップ・短いログ・カウンタ**、そして**追跡中セッションの最後の
+  アシスタント text だけ**（最大 `control.resultMaxChars` 文字）です。推論（reasoning）、ツールの
+  引数・結果、ファイル内容は**保存も配信もしません**。`assistant/message` の `text` ブロックだけを
+  畳み、`user/message`（次の依頼）でクリアします。`todo_write` のステップ文字列は従来どおり例外です。
+- **プロンプトは `control.maxPromptChars` 文字まで**、`POST /api/session` の body は 64KB まで。
+  送信先は**ワークスペース台帳に載っている path のみ**で、それ以外は 400 `workspace_not_found`。
+- 公開 URL は「URL を知っていれば誰でも」届きます。しかもトークン付き URL は**新しいセッションを
+  開始する権限**になります（`/api/workspaces` はワークスペースの path も返します）。
+  人に見せないでください。漏れたら `access-token` ファイルを消して再起動すれば新しいトークンになります。
 
 ## モデル側の使い方
 
@@ -172,9 +240,14 @@ powercfg /setactive SCHEME_CURRENT
 | `tunnel.requireToken` | `true` | 公開時にトークンを必須にする（false は非推奨） |
 | `tunnel.maxRestarts` | `20` | トンネルが落ちたときの再起動回数 |
 | `keepAwake` | `{ enabled: true, keepDisplayOn: false }` | スリープ抑止。`keepAwake: false` で無効 |
+| `control` | `{ enabled: true, workspacesFile: "", maxPromptChars: 8000, resultMaxChars: 4000 }` | スマホからのセッション開始と結果表示。`control: false` で無効 |
+| `control.enabled` | `true` | false なら `POST /api/session` は 403 `control_disabled` |
+| `control.workspacesFile` | `""` | ワークスペース台帳の JSON。空なら `~/.dsh/storages/workspace.json` |
+| `control.maxPromptChars` | `8000` | 送れるプロンプトの最大文字数 |
+| `control.resultMaxChars` | `4000` | 画面に出す最終結果の最大文字数（超えたら切る） |
 | `injectPrompt` 相当 | 常時 | システムプロンプトに使い方の節を足します（短い） |
 
-`tunnel` は `false` の短縮形も受け付けます。
+`tunnel` / `keepAwake` / `control` は `false` の短縮形も受け付けます。
 
 ## HTTP API
 
@@ -182,9 +255,37 @@ powercfg /setactive SCHEME_CURRENT
 |---|---|---|
 | `/` | なし | モバイル UI（シェル） |
 | `/style.css`, `/app.js`, `/sw.js`, `/icon*`, `/manifest.webmanifest` | なし | PWA アセット（manifest は `start_url` にトークンを注入して生成） |
-| `/api/state` | **必要** | 現在の JSON 状態 |
+| `/api/state` | **必要** | 現在の JSON 状態（`session.result` / `session.resultState` / `server.control` を含む） |
 | `/api/stream` | **必要** | SSE（状態変更ごとに `data: {...}`、15 秒ごとに heartbeat） |
+| `/api/workspaces` | **必要**（GET） | ワークスペース一覧 `{ok, workspaces[{id,title,path,updatedAt,sessionCount,exists}], control:{enabled,available,error}}` |
+| `/api/session` | **必要**（POST, `application/json`, body ≤ 64KB） | プロンプトを送って新しいセッションを開始 |
 | `/healthz` | なし | 死活監視 |
+
+`/api/` 配下はすべて `?k=<token>` か `x-progress-token` が必要です（無ければ 401）。
+
+### `POST /api/session`
+
+```json
+{ "workspaceId": "…", "prompt": "ログイン画面のバリデーションを直して" }
+```
+
+`workspaceId` の代わりに `cwd` を直接渡すこともできます（台帳に載っている path のみ）。
+成功は `201` と `{ ok: true, session: { id, short, cwd }, workspace: { id, title, path } }`。
+
+| ステータス / コード | 意味 |
+|---|---|
+| `400 prompt_required` | `prompt` が空 |
+| `400 prompt_too_long` | `control.maxPromptChars` 超過 |
+| `400 workspace_required` | `workspaceId` も `cwd` も無い |
+| `400 workspace_not_found` | 台帳に無い path |
+| `403 control_disabled` | `control.enabled: false` |
+| `413 payload_too_large` | body が 64KB 超 |
+| `415 unsupported_media_type` | `application/json` 以外 |
+| `502 session_create_failed` | セッション作成に失敗 |
+| `503 session_control_unavailable` | `sessionController` が取れない |
+
+メソッドが違うと 405（`allow` ヘッダー付き）。台帳が読めないときも `GET /api/workspaces` は
+200 で、空の一覧と `control.error` を返します（画面は「一覧を読めません」と表示）。
 
 ## PWA の仕組み
 
@@ -211,8 +312,14 @@ powercfg /setactive SCHEME_CURRENT
   `-File` で渡すのが正解です（実測で踏んだ罠）。
 - 公開 URL が出るのは cloudflared の出力に URL が現れた瞬間だけ。準備前に URL を表示すると
   「開いても繋がらない」体験になるため、`status: running` までは `publicUrl` を空にしています。
+- 結果も派生キャッシュです。`assistant/message` の `text` ブロックを畳むだけで、真実はセッション
+  ログ側にあります。`user/message` が来たらクリアします（前のターンの結果を残さない）。
+- `sessionController` は起動時に必須にしません（無い環境でも進捗表示は動くべきなので）。
+  `POST /api/session` のときだけ `ctx.get('sessionController')` を引き、無ければ 503 を返します。
 
-## 検証済み（2026-11-17 / この PC）
+## 検証済み（2026-11-17 / v0.2.0 時点・この PC）
+
+以下は **v0.2.0 時点**の実測記録です（履歴として残します）。v0.3.0 の新機能の検証は統合後に追記します。
 
 - 単体テスト 20 本（`lib/tunnel.js` の URL 検出・トークン付与・PATH 探索・keep-awake 仕様・
   manifest ではなく純関数）が pass。
@@ -232,8 +339,16 @@ node --check index.js
 node --check lib/tunnel.js
 node --check public/app.js
 node --check public/sw.js
-node --test                      # 20 tests
+
+node --test                                  # test/ 配下をまとめて実行
+node --test test/state.test.mjs              # ファイルを列挙して個別に回す例
 ```
+
+テストは `test/` 配下にあります（`state.test.mjs` = 進捗 fold と純関数、`tunnel.test.mjs` =
+トンネル設定と URL 検出、`workspaces.test.mjs` = 台帳・プロンプト検証・結果抽出、
+`ui-contract.test.mjs` = 依頼パネルの要素 id・送信形・最下層表示・fan-out 指示・Service Worker 契約）。
+v0.3.0 の残りのテスト（`/api/session` の HTTP・E2E）は統合時にこのフォルダへ追加されます。
+本数は追加分で変わるので、README には書きません。
 
 Host を再起動せずに画面を確認したいときは、同じコードをモック Host で走らせるサイドカーが使えます。
 
@@ -244,6 +359,65 @@ $env:DSH_MP_TUNNEL='1'; $env:DSH_MP_KEEPAWAKE='1'; node dev/sidecar.mjs
 `public/` のファイルは実行時にそのまま配信されるので、編集後はスマホ側を再読み込みすれば反映されます
 （Service Worker の版番号を上げると確実に更新されます）。
 
+v0.3.0 の新機能（`/api/workspaces`・`/api/session`・結果 fold・依頼パネル）の E2E は
+**統合後に実行してここへ追記します**。この README には未実行の検証結果を書きません。
+
+## 左サイドバーの「スマホ進捗」パネル（v0.4.0）
+
+Web UI の左サイドバーに **スマホ進捗** の行が常駐します。アイコンを押すと、スマホで何を開けばよいかと、
+いま何がどこまで進んでいるかが 1 画面で分かります。
+
+| 表示 | 中身 |
+|---|---|
+| QR コード | スマホで読み取ると進捗ページがそのまま開く（トンネルが生きていれば公開 URL、なければ LAN URL） |
+| 同じ Wi-Fi から / 外から（トンネル） | 実際の URL と「コピー」「開く」。`?k=` のトークン込み |
+| いまの進み具合 | タイトル・%・現在の手順・手順リスト・直近の動き |
+| メタ行 | 最終更新・ポート・セッション・トンネル状態・スリープ防止の有無 |
+
+### 常駐の意味
+
+- **クライアント側**: `dsh.client.immediately: true` でページ起動時に読み込まれ、`sidebar.panellist` に
+  行を 1 つ登録します。アプリを閉じるまで消えません（パネルを開いていなくても行は残ります）。
+- **ホスト側**: プラグインの `apply` で LAN サーバ・トンネル・スリープ防止が起動し、
+  パネルを一度も開かなくてもスマホへの配信は続きます。
+- パネル自体は 3 秒ごとに同じ状態を読み直すだけで、状態を持ちません（真実は常に Host 側）。
+
+### データの経路
+
+パネルは**同じオリジン**の JSON を読みます。スマホ配信の 8790 番とは別経路なので、
+CORS もトークンも要らず、LAN 側の口を Web UI に露出しません。
+
+```
+GET /mobile-progress-api/state
+  -> { ok, listening, port, phoneUrl, publicUrl, qrUrl, qr: { size, rows }, session, server, tunnel, keepAwake }
+```
+
+`qr` はモジュール行列（`'1'`/`'0'` の行文字列）で、ブラウザ側は受け取った行列を canvas に塗るだけです。
+符号化は Host 側の `lib/qr.js` が行い、実体は MIT ライセンスの qrcode-generator 1.4.4
+（`vendor/qrcode.cjs` にそのまま同梱）です。
+
+### インストールと反映
+
+```powershell
+plugin_manager install_bundle  target: <このフォルダの絶対パス>
+```
+
+- **クライアント側（画面）は初回だけ再読み込みが要ります。** インストール後に Web UI を再読み込み
+  （アプリなら Ctrl+R、またはアプリ再起動）すると、サイドバーに行が出ます。2 回目以降は起動のたびに自動で載ります。
+- **ホスト側のコードを書き換えた場合**は ESM キャッシュが残るので、
+  `plugin_manager set_plugin enabled:false` → `enabled:true`（entryId は `include:mobile-progress`）で
+  新しい世代を読み込ませてください。
+
+### 検証済みのこと
+
+- `GET /mobile-progress-api/state` が 200 で `phoneUrl` / `publicUrl` / 41×41 の `qr` を返す（実機の DSH 上で確認）。
+- QR は符号化 → ラスタライズ → jsQR 1.4.0 でデコードし、元の URL と一致することを確認
+  （LAN URL・公開 URL・短い URL・長すぎて `null` になる場合）。
+- `client.js` をページと同じ経路（`window.__ModuleLoader__.load`）で読み込み、`apply(ctx)` が
+  `sidebar.panellist`（id `mobile-progress`）と `main`（key `mobile-progress`）を登録することを
+  `test/client-registration.test.mjs` で固定。
+- パネルとアイコンが DOM なしでも例外を投げずに描画されること、未接続時に案内文が出ること。
+
 ## 制限
 
 - クイックトンネルは **URL が再起動ごとに変わります**。固定したいなら named トンネル。
@@ -252,3 +426,6 @@ $env:DSH_MP_TUNNEL='1'; $env:DSH_MP_KEEPAWAKE='1'; node dev/sidecar.mjs
 - cloudflared の自動取得は Windows x64 / arm64 と Linux x64 / arm64 のみ。macOS は
   `brew install cloudflared` して `tunnel.binaryPath` を指定してください。
 - ログイン付きの `?k=` は 1 本の共有秘密です。複数ユーザーで使い分ける設計ではありません。
+- 追跡できるセッションは**同時 1 つ**です。`/api/session` で開始したセッションに切り替わります。
+- `POST /api/session` は `cwd` ベースでセッションを作ります。モデル・エージェントプリセット・
+  権限モードは指定できず、DSH の既定に従います。

@@ -11,15 +11,15 @@
 
 | ファイル | 役割 |
 | --- | --- |
-| `reel/site/index.html` | 本体。12 スライド（hero / 一覧 / 個別カード 7 / 原文 / 使い方） |
+| `reel/site/index.html` | 本体。11 スライド（hero / 一覧 / 個別カード 6 / 原文 / 使い方） |
 | `reel/site/style.css` | スタイル。`:root` の色トークンと、vh 基準のタイポ |
 | `reel/site/serve.mjs` | 依存なしの静的サーバ。既定ポート 4321 |
 | `reel/site/.nojekyll` | GitHub Pages で Jekyll 処理を止めるための空ファイル |
 
 スライド id（撮影時の `?reel=` に使う）:
-`hero`, `list`, `p1`…`p7`（各プラグイン）, `source`, `install`。
+`hero`, `list`, `p1`…`p6`（各プラグイン）, `source`, `install`。
 
-## 2. 載せた 7 プラグインと、その事実の出典
+## 2. 載せた 6 プラグインと、その事実の出典
 
 名前・バージョン・説明は **各ディレクトリの `package.json` の `description` を一次情報**とし、
 日本語のリード文はその要約（誇張なし）。
@@ -27,17 +27,20 @@
 | # | プラグイン | version | 出典 |
 | --- | --- | --- | --- |
 | 01 | `dsh-fanout` | 0.3.0 | `dsh-fanout/package.json` |
-| 02 | `dsh-browser-agent` | 1.0.1 | `dsh-browser-agent/package.json` |
-| 03 | `dsh-mobile-progress` | 0.3.0（name は `@local/dsh-mobile-progress`） | `dsh-mobile-progress/package.json` |
-| 04 | `dsh-deliberation` | 0.1.0 | `dsh-deliberation/package.json` |
-| 05 | `dsh-emulator-lab` | 0.1.0 | `dsh-emulator-lab/package.json` |
-| 06 | `dsh-social-desktop-agent` | 0.1.0 | `dsh-social-desktop-agent/package.json` |
-| 07 | `dsh-builtin-browser-localfix` | package.json なし | `README.md` の見出しと冒頭説明 |
+| 02 | `dsh-mobile-progress` | 0.3.0（name は `@local/dsh-mobile-progress`） | `dsh-mobile-progress/package.json` |
+| 03 | `dsh-deliberation` | 0.1.0 | `dsh-deliberation/package.json` |
+| 04 | `dsh-emulator-lab` | 0.1.0 | `dsh-emulator-lab/package.json` |
+| 05 | `dsh-social-desktop-agent` | 0.1.0 | `dsh-social-desktop-agent/package.json` |
+| 06 | `dsh-builtin-browser-localfix` | package.json なし | `README.md` の見出しと冒頭説明 |
 
 `dsh-builtin-browser-localfix` はパッチ配布で `package.json` が無いため、サイト上でも
 「package.json なし（パッチ配布）」と明記し、原文スライドには README 由来であることを書いた。
-`dsh-browser-agent` は `.gitignore` により repo に未収録（第三者 MIT 作品のクローン）なので、
-サイトの bullets にもその旨を残している。
+
+> **2026-11-21 の変更:** 第三者作の `dsh-browser-agent`（hermes-ai-2026, MIT）のカードを
+> 公開サイトから外した。自分の著作物だけを配る方針にしたため、サイトは 7 本 → 6 本になり、
+> 節番号も振り直した。リポジトリ側は元から `.gitignore` で未収録。
+> 以下の 3〜7 節に残る「7」「12416 bytes」等の実測値は **2026-11-17 時点の記録**なので、
+> 当時のまま残している。
 
 ## 3. ローカル HTTP 配信（実測）
 
