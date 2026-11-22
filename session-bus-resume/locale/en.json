@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Session Bus Resume Sweep",
-    "description": "Resumes exactly the sessions recorded by the stop sweep, all at once, from the host apply hook."
-  }
-}

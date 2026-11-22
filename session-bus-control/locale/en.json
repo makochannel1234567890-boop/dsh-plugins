@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Session Bus Control Sweep",
-    "description": "One-shot stop of every running parallel session, followed by an all-at-once resume after a delay. Runs inside the host apply hook."
-  }
-}

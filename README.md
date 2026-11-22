@@ -36,13 +36,8 @@ DSH のプラグイン機構（Host プラグイン + Cordis バンドルパッ�
 
 | フォルダ | パッケージ | 内容 |
 |---|---|---|
-| [`dsh-fanout`](dsh-fanout/) | `dsh-fanout` | **セッションの分岐と統合。** 1 セッションを N の並行セッションに振り分け、作業の重さで自動配分し、最後に統合用セッションが統合・検証・ビルドまで行う。早すぎる結論を潰す `divergence_check` も同梱 |
 | [`dsh-deliberation`](dsh-deliberation/) | `dsh-deliberation` | **承認つき長考モード。** ラウンド数と時間の予算を決めて深く考えさせ、Git 作業ツリーで隔離できる。止めたいときは新しいメッセージを送るだけ |
 | [`dsh-mobile-progress`](dsh-mobile-progress/) | `dsh-mobile-progress` | **スマホで進捗を見る PWA。** `todo_write` を自動ミラーし、SSE で即時同期。オフライン表示・cloudflared による公開 HTTPS URL・スリープ抑止つき |
-| [`session-bus`](session-bus/) | `dsh-session-bus` | 並行セッション間の進捗共有。`share_progress` とダイジェスト注入で、別セッションの作業と衝突しにくくする |
-| [`session-bus-control`](session-bus-control/) | `dsh-session-bus-control` | 並行セッションの一斉停止（開発補助） |
-| [`session-bus-resume`](session-bus-resume/) | `dsh-session-bus-resume` | 停止したセッションの一斉再開（開発補助） |
-| [`crash-recovery`](crash-recovery/) | `dsh-crash-recovery` | **予期しない終了からの自動復旧。** 死活ジャーナルで異常終了を検知し、復旧を監督するセッションを1つだけ立て、停止した全セッションを「fanout の run / task / attempt を名指しした役割別プロンプト」で再開する。単なる resume では戻らない fanout 使用セッションのための仕組み。外部ウォッチドッグ同梱 |
 | [`dsh-emulator-lab`](dsh-emulator-lab/) | `dsh-emulator-lab` | **低スペック端末の見積もり。** サイドバーから Android AVD / iOS Simulator を起動し、決定論的な SoC モデル（INT8 TOPS・メモリ帯域・CPU/GPU スコア・熱予算）から FPS を見積もる。「推定」であることとボトルネックを明示 |
 | [`dsh-builtin-browser-localfix`](dsh-builtin-browser-localfix/) | — | 内蔵ブラウザを「1 ターン終了ごとにタブを閉じる」ようにするためのパッチ（`turn-cleanup.patch` + 適用スクリプト） |
 | [`dsh-social-desktop-agent`](dsh-social-desktop-agent/) | `dsh-social-desktop-agent` | **ソーシャル Web 閲覧＋Windows デスクトップ操作（スコープ制・既定は最小権限）。** ドメイン/アプリの allowlist、いいね・フォロー・DM・投稿・コメント等の書き込みは恒久拒否、電源操作はスコープ＋確認トークン＋環境変数の三段ゲートで既定 dry-run、JSONL 監査ログと kill switch、ログイン/2FA/CAPTCHA 検出時は人間に渡して停止 |
@@ -50,6 +45,12 @@ DSH のプラグイン機構（Host プラグイン + Cordis バンドルパッ�
 > `dsh-mobile-progress` の `package.json` 上の `name` は、手元のプロファイルから
 > link で参照されている都合で `@local/dsh-mobile-progress` のままです。
 > インストールするときはフォルダ名（`dsh-mobile-progress`）を指定してください。
+
+> **引退したプラグイン:** `dsh-fanout`（1 セッションを並行ワーカーへ分岐させる仕組み）と、
+> それに依存していた並列セッション系（`session-bus` / `session-bus-control` /
+> `session-bus-resume` / `crash-recovery`）は引退しました。軽量モデルでは計画と
+> 受け入れ基準の設計が安定せず、分解するほど遅く・悪くなるためです。本体は ZIP で
+> 手元の `archive/` に保管しており、このリポジトリには含めていません。
 
 ### このリポジトリに含めていないもの
 
@@ -64,10 +65,8 @@ README に書いたことは、実際に動かして確かめた範囲だけで�
 
 | 項目 | 状態 |
 |---|---|
-| `dsh-fanout` の plan / prompts / bridge テスト | **54 チェック通過**（19 + 18 + 17） |
 | `dsh-mobile-progress` のテスト | **20 通過** |
 | `dsh-deliberation` のテスト | **1 通過** |
-| `dsh-crash-recovery` のテスト | **34 チェック通過**（detect 8 + resume-plan 12 + journal 7 + prompts 7）。停止していた実セッション2つ（fanout 呼び出し元とワーカー）を役割別プロンプトで復旧し、両方 `running: true` を実測 |
 | `dsh-social-desktop-agent` のテスト | **279 通過**（core 74 + browser 79 + desktop 109 + 統合 17）。`scripts/verify.mjs` 16 項目 PASS、`scripts/check-plugin.ps1` exit 0 |
 | スマホ進捗の PWA オフライン表示 | 実機で確認済み（`shots/pwa-offline.png`） |
 | 同一 Wi-Fi 外からの閲覧 | cloudflared 公開 URL 経由で確認済み |

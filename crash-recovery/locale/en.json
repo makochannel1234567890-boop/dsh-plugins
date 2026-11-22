@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Crash Recovery",
-    "description": "Survives an unexpected Harness exit: a liveness journal, one supervisor session that reconciles broken fanout runs, then a role-aware resume sweep for every session the crash stopped."
-  }
-}

@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>dsh-plugins — DeepSeek Harness 用プラグイン置き場</title>
-<meta name="description" content="DeepSeek Harness（DSH）を自分の作業環境に合わせるために書いたプラグイン6つの紹介。MIT ライセンス。" />
+<meta name="description" content="DeepSeek Harness（DSH）を自分の作業環境に合わせるために書いたプラグイン5つの紹介。MIT ライセンス。" />
 <meta name="theme-color" content="#0b0d12" />
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -18,7 +18,7 @@
     <h1 class="hero-title">プラグイン<br /><span class="grad">置き場</span></h1>
     <p class="hero-sub">DSH を、自分の作業環境に合わせる。</p>
     <div class="chips">
-      <span class="chip chip--accent">6 plugins</span>
+      <span class="chip chip--accent">5 plugins</span>
       <span class="chip">MIT</span>
       <span class="chip">Windows</span>
       <span class="chip">無料</span>
@@ -32,38 +32,21 @@
 <section id="list" class="slide">
   <div class="frame">
     <p class="kicker">収録プラグイン</p>
-    <h2 class="h2">6 つ、ぜんぶ<br />無料で MIT</h2>
+    <h2 class="h2">5 つ、ぜんぶ<br />無料で MIT</h2>
     <ol class="list">
-      <li><span class="num">01</span><span class="list-name">dsh-fanout</span><span class="list-tag">分岐と統合</span></li>
-      <li><span class="num">02</span><span class="list-name">dsh-mobile-progress</span><span class="list-tag">スマホ進捗</span></li>
-      <li><span class="num">03</span><span class="list-name">dsh-deliberation</span><span class="list-tag">承認つき長考</span></li>
-      <li><span class="num">04</span><span class="list-name">dsh-emulator-lab</span><span class="list-tag">低スペック検証</span></li>
-      <li><span class="num">05</span><span class="list-name">dsh-social-desktop-agent</span><span class="list-tag">スコープ制</span></li>
-      <li><span class="num">06</span><span class="list-name">dsh-builtin-browser-localfix</span><span class="list-tag">パッチ</span></li>
+      <li><span class="num">01</span><span class="list-name">dsh-mobile-progress</span><span class="list-tag">スマホ進捗</span></li>
+      <li><span class="num">02</span><span class="list-name">dsh-deliberation</span><span class="list-tag">承認つき長考</span></li>
+      <li><span class="num">03</span><span class="list-name">dsh-emulator-lab</span><span class="list-tag">低スペック検証</span></li>
+      <li><span class="num">04</span><span class="list-name">dsh-social-desktop-agent</span><span class="list-tag">スコープ制</span></li>
+      <li><span class="num">05</span><span class="list-name">dsh-builtin-browser-localfix</span><span class="list-tag">パッチ</span></li>
     </ol>
   </div>
 </section>
 
 <!-- 03 card 1 -->
-<section id="p1" class="slide slide--card">
-  <div class="frame card">
-    <p class="kicker">01 / 06</p>
-    <h2 class="card-title">dsh-fanout</h2>
-    <p class="card-ver"><code>dsh-fanout</code> · v0.3.0</p>
-    <p class="card-lead">1 セッションを複数の並行ワーカーに振り分け、重さで配分。最後に統合用セッションが統合・検証・ビルドまでやる。</p>
-    <ul class="bullets">
-      <li>並行ワーカーへの自動配分</li>
-      <li>統合役（統合＋検証＋ビルド）の自動起動</li>
-      <li>早すぎる結論を潰す <code>divergence_check</code></li>
-      <li>左サイドバーのボード／Web スライダー 2 本</li>
-    </ul>
-  </div>
-</section>
-
-<!-- 04 card 2 -->
 <section id="p2" class="slide slide--card">
   <div class="frame card">
-    <p class="kicker">02 / 06</p>
+    <p class="kicker">01 / 05</p>
     <h2 class="card-title">dsh-mobile-progress</h2>
     <p class="card-ver"><code>@local/dsh-mobile-progress</code> · v0.3.0<br /><span class="small">インストール時のフォルダ名は <code>dsh-mobile-progress</code></span></p>
     <p class="card-lead">エージェントの進捗をスマホの PWA で見る。Host プラグインが SSE で進捗バーを配信する。</p>
@@ -76,10 +59,10 @@
   </div>
 </section>
 
-<!-- 05 card 3 -->
+<!-- 04 card 2 -->
 <section id="p3" class="slide slide--card">
   <div class="frame card">
-    <p class="kicker">03 / 06</p>
+    <p class="kicker">02 / 05</p>
     <h2 class="card-title">dsh-deliberation</h2>
     <p class="card-ver"><code>dsh-deliberation</code> · v0.1.0</p>
     <p class="card-lead">承認つきの、範囲の決まった長考モード。</p>
@@ -92,10 +75,10 @@
   </div>
 </section>
 
-<!-- 06 card 4 -->
+<!-- 05 card 3 -->
 <section id="p4" class="slide slide--card">
   <div class="frame card">
-    <p class="kicker">04 / 06</p>
+    <p class="kicker">03 / 05</p>
     <h2 class="card-title">dsh-emulator-lab</h2>
     <p class="card-ver"><code>dsh-emulator-lab</code> · v0.1.0</p>
     <p class="card-lead">サイドバーから Android AVD / iOS Simulator を起動し、低スペック端末の FPS を見積もる。</p>
@@ -107,10 +90,10 @@
   </div>
 </section>
 
-<!-- 07 card 5 -->
+<!-- 06 card 4 -->
 <section id="p5" class="slide slide--card">
   <div class="frame card">
-    <p class="kicker">05 / 06</p>
+    <p class="kicker">04 / 05</p>
     <h2 class="card-title">dsh-social-desktop-agent</h2>
     <p class="card-ver"><code>dsh-social-desktop-agent</code> · v0.1.0</p>
     <p class="card-lead">allowlist 内のソーシャル Web 閲覧と、ローカルデスクトップの観察・操作。既定は最小権限。</p>
@@ -123,10 +106,10 @@
   </div>
 </section>
 
-<!-- 08 card 6 -->
+<!-- 07 card 5 -->
 <section id="p6" class="slide slide--card">
   <div class="frame card">
-    <p class="kicker">06 / 06</p>
+    <p class="kicker">05 / 05</p>
     <h2 class="card-title">dsh-builtin-browser-localfix</h2>
     <p class="card-ver"><span class="small">package.json なし（パッチ配布）</span></p>
     <p class="card-lead">内蔵ブラウザを「1 ターンの終わりに、そのタスクのブラウザセッションを閉じる」ようにするパッチ。</p>
@@ -139,14 +122,12 @@
   </div>
 </section>
 
-<!-- 09 source -->
+<!-- 08 source -->
 <section id="source" class="slide slide--source">
   <div class="frame">
     <p class="kicker">原文</p>
     <h2 class="h2">各 package.json の<br />description</h2>
     <dl class="src">
-      <dt>dsh-fanout</dt>
-      <dd>Fan one session out into several parallel worker sessions for large asymmetric jobs, auto-start an integrator that merges + verifies + builds, run an unanchored expansion gate against premature narrowing, show every run's progress on a left-sidebar board, and dial the cost with two Web sliders.</dd>
       <dt>dsh-mobile-progress</dt>
       <dd>Live agent progress on the phone as an installable PWA: a Host plugin serves a progress bar over SSE, starts a new DSH session from a workspace chosen on the phone, shows the final assistant result on the same screen, exposes a public HTTPS URL through a cloudflared tunnel (so the phone works off the LAN), and keeps the PC awake while the feed is live.</dd>
       <dt>dsh-deliberation</dt>
@@ -161,7 +142,7 @@
   </div>
 </section>
 
-<!-- 10 install -->
+<!-- 09 install -->
 <section id="install" class="slide slide--end">
   <div class="frame">
     <p class="kicker">使い方</p>
