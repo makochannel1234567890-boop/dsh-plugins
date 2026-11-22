@@ -112,10 +112,10 @@ $u = 'https://makochannel1234567890-boop.github.io/dsh-plugins/'
 $r = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 20
 $r.StatusCode                      # → 200 を期待
 $r.Content -match 'dsh-emulator-lab'   # → True を期待
-($r.Content | Select-String -Pattern 'dsh-fanout|dsh-browser-agent|dsh-mobile-progress|dsh-deliberation|dsh-emulator-lab|dsh-social-desktop-agent|dsh-builtin-browser-localfix' -AllMatches).Matches.Count
+($r.Content | Select-String -Pattern 'dsh-mobile-progress|dsh-deliberation|dsh-emulator-lab|dsh-social-desktop-agent|dsh-builtin-browser-localfix' -AllMatches).Matches.Count
 ```
 
-7 つとも出ていれば公開成功。スマホでも同じ URL を開いて縦長で読めることを確認する。
+5 つとも出ていれば公開成功。スマホでも同じ URL を開いて縦長で読めることを確認する。
 
 ---
 
